@@ -8,7 +8,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (/^[A-Za-z0-9_-]{43}$/.test(token)) {
       tokenInput.value = token;
       document.getElementById("delivery-button").disabled = false;
-      document.getElementById("delivery-help").textContent = "Ce lien ne permet qu’une seule récupération.";
+      document.getElementById("delivery-help").textContent =
+        "Ce lien ne permet qu’une seule récupération.";
     }
   }
 });
@@ -29,7 +30,8 @@ document.addEventListener("htmx:afterSwap", (event) => {
 function showNetworkError() {
   const feedback = document.getElementById("feedback");
   if (feedback) {
-    feedback.textContent = "Le serveur est momentanément indisponible. Vérifiez votre connexion puis réessayez.";
+    feedback.textContent =
+      "Le serveur est momentanément indisponible. Vérifiez votre connexion puis réessayez.";
   }
 }
 document.addEventListener("htmx:sendError", showNetworkError);

@@ -17,7 +17,12 @@ async def browser_security(request: Request, call_next):
     csrf_invalid = (
         unsafe
         and request.url.path.startswith("/web/")
-        and (not csrf or not secrets.compare_digest(csrf, request.headers.get("x-csrf-token", "")))
+        and (
+            not csrf
+            or not secrets.compare_digest(
+                csrf.encode(), request.headers.get("x-csrf-token", "").encode()
+            )
+        )
     )
     if origin_invalid or csrf_invalid:
         if request.url.path.startswith("/web/"):
