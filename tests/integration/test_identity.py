@@ -212,3 +212,46 @@ def test_capability_scopes_are_not_interchangeable(client):
 def test_health_checks(client):
     assert client.get("/health/live").status_code == 200
     assert client.get("/health/ready").json()["database"] == "postgresql"
+
+
+def test_concurrent_login_cannot_reuse_one_totp_code(client, clock):
+    password, secret = activate(client, clock)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(executor.map(lambda _: login(client, clock, password, secret), range(2)))
+    assert sorted(response.status_code for response in responses) == [200, 401]
+
+
+def test_expired_renewal_authorization_is_rejected(client, clock):
+    password, secret = activate(client, clock)
+    clock.advance(200 * 24 * 3600)
+    result = login(client, clock, password, secret).json()
+    assert result["status"] == "renewal_required"
+    clock.advance(5 * 60)
+    assert client.post("/api/credentials/renew", headers=bearer(result["token"])).status_code == 401
+
+
+def test_new_session_revokes_previous_one_and_expires(client, clock):
+    password, secret = activate(client, clock)
+    first = login(client, clock, password, secret).json()["token"]
+    clock.advance()
+    second = login(client, clock, password, secret).json()["token"]
+    assert client.get("/api/me", headers=bearer(first)).status_code == 401
+    assert client.get("/api/me", headers=bearer(second)).status_code == 200
+    clock.advance(30 * 60)
+    assert client.get("/api/me", headers=bearer(second)).status_code == 401
+
+
+def test_incorrect_totp_does_not_activate_account(client, clock, database):
+    registration = register(client)
+    redeem(client, registration)
+    headers = bearer(registration["enrollment_token"])
+    secret = client.post("/api/enrollment/totp", headers=headers).json()["secret"]
+    valid_codes = {
+        pyotp.TOTP(secret).at(clock() + timedelta(seconds=offset)) for offset in (-30, 0, 30)
+    }
+    bad_code = next(f"{number:06d}" for number in range(10) if f"{number:06d}" not in valid_codes)
+    response = client.post("/api/enrollment/confirm", headers=headers, json={"code": bad_code})
+    assert response.status_code == 401
+    with database() as session:
+        user = session.scalar(select(UserRow))
+        assert not user.mfa_confirmed and user.generated_at is None
