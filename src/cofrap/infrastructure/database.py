@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, String, Text, create_engine
+from sqlalchemy import BigInteger, DateTime, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 from cofrap.infrastructure.settings import Settings
@@ -22,7 +22,7 @@ class UserRow(Base):
     expired: Mapped[bool] = mapped_column(default=False)
     mfa_confirmed: Mapped[bool] = mapped_column(default=False)
     totp_ciphertext: Mapped[str | None] = mapped_column(Text)
-    last_totp_step: Mapped[int | None]
+    last_totp_step: Mapped[int | None] = mapped_column(BigInteger)
     delivery_ciphertext: Mapped[str | None] = mapped_column(Text)
     delivery_digest: Mapped[str | None] = mapped_column(String(64), unique=True)
     delivery_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
