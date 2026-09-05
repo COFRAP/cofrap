@@ -16,8 +16,12 @@
   <header class="header">
     <a href="/" class="brand" aria-label="COFRAP accueil"><span class="brand-mark" aria-hidden="true">c.</span>COFRAP<span class="brand-divider">/</span><span class="brand-sub">identité</span></a>
     <nav aria-label="Navigation principale">
+      {% if authenticated_user %}
+      <a href="/account">Mon compte <span aria-hidden="true">↗</span></a>
+      {% else %}
       {% if request.cookies.get('cofrap_enrollment') %}<a href="/enrollment">Reprendre l’activation</a>{% endif %}
       <a href="/login">Se connecter <span aria-hidden="true">↗</span></a>
+      {% endif %}
     </nav>
   </header>
   <main class="layout">

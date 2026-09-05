@@ -1,11 +1,12 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
 from cofrap.application.authentication import AuthenticationService
 from cofrap.application.enrollment import EnrollmentService
-from cofrap.application.results import Enrollment
+from cofrap.application.results import Enrollment, UserInfo
+from cofrap.domain.errors import InvalidToken
 from cofrap.presentation import dependencies
 from cofrap.presentation.enrollment_routes import present_enrollment
 from cofrap.presentation.qr import qr_data_url
@@ -39,14 +40,23 @@ def show_enrollment(request: Request, result: Enrollment):
     return response
 
 
+def guest_page(request: Request, name: str, user: UserInfo | None):
+    if user is not None:
+        return RedirectResponse("/account", status_code=303)
+    response = page(request, name)
+    if request.cookies.get("cofrap_session"):
+        response.delete_cookie("cofrap_session")
+    return response
+
+
 @router.get("/")
-def home(request: Request):
-    return page(request, "register")
+def home(request: Request, user: UserInfo | None = Depends(dependencies.browser_user)):
+    return guest_page(request, "register", user)
 
 
 @router.get("/login")
-def login_page(request: Request):
-    return page(request, "login")
+def login_page(request: Request, user: UserInfo | None = Depends(dependencies.browser_user)):
+    return guest_page(request, "login", user)
 
 
 @router.get("/delivery")
@@ -81,10 +91,13 @@ def resume_enrollment(
 @router.get("/account")
 def account(
     request: Request,
-    service: AuthenticationService = Depends(dependencies.authentication),
+    user: UserInfo | None = Depends(dependencies.browser_user),
 ):
-    user = service.current_user(request.cookies.get("cofrap_session", ""))
-    return page(request, "account", user=user)
+    if user is None:
+        response = RedirectResponse("/login", status_code=303)
+        response.delete_cookie("cofrap_session")
+        return response
+    return page(request, "account", user=user, authenticated_user=user)
 
 
 @router.post("/web/register")
@@ -142,7 +155,11 @@ def login(
         set_private_cookie(response, request, "renewal", result.token, 300)
         response.delete_cookie("cofrap_session")
     else:
-        response = fragment(request, "account", user=result.user)
+        # HTMX doit naviguer vers une page GET stable, y compris au rechargement.
+        if request.headers.get("HX-Request") == "true":
+            response = Response(status_code=200, headers={"HX-Redirect": "/account"})
+        else:
+            response = RedirectResponse("/account", status_code=303)
         set_private_cookie(response, request, "session", result.token, 1800)
         response.delete_cookie("cofrap_renewal")
     return response
@@ -155,8 +172,6 @@ def renew(request: Request, service: EnrollmentService = Depends(dependencies.en
 
 @router.post("/web/logout")
 def logout(request: Request, service: AuthenticationService = Depends(dependencies.authentication)):
-    from cofrap.domain.errors import InvalidToken
-
     try:
         service.logout(request.cookies.get("cofrap_session", ""))
     except InvalidToken:

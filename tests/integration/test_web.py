@@ -13,6 +13,67 @@ def csrf(client):
     return {"X-CSRF-Token": client.cookies.get("cofrap_csrf"), "Origin": "http://testserver"}
 
 
+def sign_in(client, clock, *, htmx=False):
+    password, secret = activate(client, clock)
+    headers = csrf(client)
+    if htmx:
+        headers["HX-Request"] = "true"
+    return client.post(
+        "/web/login",
+        data={"username": "alice", "password": password, "code": pyotp.TOTP(secret).at(clock())},
+        headers=headers,
+        follow_redirects=False,
+    )
+
+
+def test_htmx_login_navigates_to_account_and_survives_reload(client, clock):
+    response = sign_in(client, clock, htmx=True)
+    assert response.status_code == 200
+    assert response.headers.get("HX-Redirect") == "/account"
+    session = client.cookies.get("cofrap_session")
+    assert session
+    for _ in range(2):
+        account = client.get("/account")
+        assert account.status_code == 200
+        assert "Bienvenue, alice" in account.text
+        assert 'href="/login"' not in account.text
+    assert client.cookies.get("cofrap_session") == session
+
+
+def test_normal_login_redirects_to_account(client, clock):
+    response = sign_in(client, clock)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/account"
+
+
+@pytest.mark.parametrize("path", ["/", "/login"])
+def test_authenticated_navigation_keeps_the_account_visible(client, clock, path):
+    sign_in(client, clock)
+    response = client.get(path)
+    assert response.url.path == "/account"
+    assert "Bienvenue, alice" in response.text
+
+
+def test_expired_browser_session_returns_to_login_without_showing_account(client, clock):
+    sign_in(client, clock)
+    # Conserver le cookie côté client mais faire expirer sa validité côté serveur.
+    clock.advance(30 * 60)
+    response = client.get("/account")
+    assert response.url.path == "/login"
+    assert "Heureux de vous retrouver" in response.text
+    assert "Bienvenue, alice" not in response.text
+    assert not client.cookies.get("cofrap_session")
+
+
+@pytest.mark.parametrize("path", ["/", "/login", "/account"])
+def test_invalid_cookie_cannot_authenticate_a_browser(client, path):
+    client.cookies.set("cofrap_session", "invalid", domain="testserver.local", path="/")
+    response = client.get(path)
+    assert response.status_code == 200
+    assert "Bienvenue, alice" not in response.text
+    assert not client.cookies.get("cofrap_session")
+
+
 def test_html_registration_delivery_totp_and_login(client, clock):
     headers = csrf(client)
     response = client.post("/web/register", data={"username": "marie"}, headers=headers)

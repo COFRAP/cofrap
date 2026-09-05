@@ -50,6 +50,10 @@ jamais lancées automatiquement au démarrage de l’API.
 6. Après six mois calendaires, les anciens facteurs autorisent uniquement le
    renouvellement. Le nouveau mot de passe et le nouveau TOTP doivent être configurés.
 
+Une connexion réussie ouvre `/account`. Un rechargement, un retour à l’accueil ou
+à `/login` conserve l’accès au compte tant que la session est valide. À expiration
+ou après déconnexion, l’accès au compte renvoie vers le formulaire de connexion.
+
 Le QR du mot de passe contient un lien temporaire, pas le mot de passe. L’ouverture
 du lien ne consomme rien : seule une confirmation POST révèle le mot de passe.
 Le QR TOTP configure l’application ; ce n’est pas un lien de remise unique.
