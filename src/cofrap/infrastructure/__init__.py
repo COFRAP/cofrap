@@ -1,0 +1,1 @@
+"""Adaptateurs techniques et persistance."""
