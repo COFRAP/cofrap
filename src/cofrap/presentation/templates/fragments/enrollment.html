@@ -1,0 +1,11 @@
+<p class="step">02 / MOT DE PASSE</p>
+<h2>Un accès rien qu’à vous.</h2>
+<p class="description">{{ result.user.username }}, ce QR code permet de récupérer votre mot de passe <strong>une seule fois</strong>. Le lien est valable 15 minutes après sa génération.</p>
+<div id="feedback" role="alert"></div>
+<div class="qr-wrap" data-secret><img class="qr" src="{{ result.delivery_qr }}" alt="QR code du lien de récupération unique du mot de passe" width="220" height="220"></div>
+<form hx-post="/web/delivery" hx-disabled-elt="find button" method="post" action="/web/delivery">
+  <input type="hidden" name="token" value="{{ delivery_token }}" data-secret>
+  <button class="primary" type="submit">Révéler le mot de passe ici <span aria-hidden="true">→</span></button>
+</form>
+<p class="field-help center">Vous pouvez scanner le QR ou utiliser le bouton sans caméra.</p>
+<p class="alternate"><a href="/enrollment">J’ai récupéré le mot de passe sur un autre appareil →</a></p>

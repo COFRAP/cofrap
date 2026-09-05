@@ -1,0 +1,6 @@
+<p class="step">RENOUVELLEMENT NÉCESSAIRE</p>
+<h2>Un nouveau départ, en sécurité.</h2>
+<p class="description">{{ user.username }}, vos identifiants ont atteint leur limite de six mois. Votre identité a été vérifiée, mais l’accès reste fermé jusqu’au renouvellement.</p>
+<div id="feedback" role="alert"></div>
+<div class="note"><p>Vous allez recevoir un nouveau mot de passe et configurer un nouveau secret TOTP. Cette autorisation est valable 5 minutes.</p></div>
+<form hx-post="/web/renew" hx-disabled-elt="find button" method="post" action="/web/renew"><button class="primary" type="submit">Renouveler mes identifiants <span aria-hidden="true">→</span></button></form>

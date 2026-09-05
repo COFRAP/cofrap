@@ -1,0 +1,9 @@
+<p class="step">REMISE UNIQUE</p>
+<h2>Votre mot de passe vous attend.</h2>
+<p class="description">Préparez votre gestionnaire de mots de passe. Après cette récupération, le lien ne fonctionnera plus.</p>
+<div id="feedback" role="alert"></div>
+<form id="delivery-form" hx-post="/web/delivery" hx-disabled-elt="find button" method="post" action="/web/delivery">
+  <input type="hidden" id="delivery-token" name="token" data-secret>
+  <button id="delivery-button" class="primary" type="submit" disabled>Récupérer mon mot de passe <span aria-hidden="true">→</span></button>
+</form>
+<p id="delivery-help" class="field-help">Ouvrez cette page depuis le QR de création de votre compte.</p>

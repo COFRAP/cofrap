@@ -1,0 +1,13 @@
+<p class="step">01 / CRÉATION DU COMPTE</p>
+<h2>Bienvenue chez vous.</h2>
+<p class="description">Choisissez votre identifiant. Nous nous occupons de générer un mot de passe sécurisé.</p>
+<ol class="steps" aria-label="Étapes de création"><li class="current">Identifiant</li><li>Mot de passe</li><li>Double authentification</li></ol>
+<div id="feedback" role="alert"></div>
+<form hx-post="/web/register" hx-disabled-elt="find button" method="post" action="/web/register">
+  <label for="username">Nom d’utilisateur</label>
+  <input id="username" name="username" placeholder="ex. marie.dupont" minlength="3" maxlength="64" pattern="[a-zA-Z0-9_.\-]+" autocomplete="username" autocapitalize="none" spellcheck="false" aria-describedby="username-help" required>
+  <p class="field-help" id="username-help">3 à 64 caractères · lettres, chiffres, point, tiret ou underscore.</p>
+  <button class="primary" type="submit">Créer mon accès <span aria-hidden="true">→</span></button>
+</form>
+<div class="note"><span class="note-icon" aria-hidden="true">i</span><p>Prévoyez votre application d’authentification et un gestionnaire de mots de passe pour les prochaines étapes.</p></div>
+<p class="alternate">Déjà un compte ? <a href="/login">Se connecter</a></p>

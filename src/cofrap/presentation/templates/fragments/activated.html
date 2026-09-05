@@ -1,0 +1,7 @@
+<span class="success-symbol" aria-hidden="true">✓</span>
+<p class="step">CONFIGURATION TERMINÉE</p>
+<h2>Vous êtes prêt.</h2>
+<p class="description">Le compte <strong>{{ user.username }}</strong> est activé. Votre mot de passe et votre double authentification sont valables jusqu’au {{ user.expires_at.strftime('%d/%m/%Y') }}.</p>
+<div id="feedback" role="alert"></div>
+<div class="note"><p>Attendez le prochain code dans votre application pour vous connecter. Chaque code ne peut être utilisé qu’une fois.</p></div>
+<a class="primary button-link" href="/login">Me connecter <span aria-hidden="true">→</span></a>

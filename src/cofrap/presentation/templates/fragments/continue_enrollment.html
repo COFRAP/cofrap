@@ -1,0 +1,7 @@
+<p class="step">03 / DOUBLE AUTHENTIFICATION</p>
+<h2>Une dernière protection.</h2>
+<p class="description">{{ user.username }}, votre mot de passe a été récupéré. Configurez maintenant votre application d’authentification.</p>
+<div id="feedback" role="alert"></div>
+<form hx-post="/web/enrollment/totp" hx-disabled-elt="find button" method="post" action="/web/enrollment/totp">
+  <button class="primary" type="submit">Configurer mon application <span aria-hidden="true">→</span></button>
+</form>

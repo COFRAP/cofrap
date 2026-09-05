@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from fastapi.staticfiles import StaticFiles
 
 from cofrap.application.authentication import AuthenticationService
 from cofrap.application.enrollment import EnrollmentService
@@ -11,7 +12,9 @@ from cofrap.infrastructure.database import create_session_factory
 from cofrap.infrastructure.repositories import SqlUnitOfWork
 from cofrap.infrastructure.security import CryptoSecurity
 from cofrap.infrastructure.settings import Settings, get_settings
-from cofrap.presentation import auth_routes, enrollment_routes, errors, health_routes
+from cofrap.presentation import auth_routes, enrollment_routes, errors, health_routes, web_routes
+from cofrap.presentation.middleware import browser_security
+from cofrap.presentation.rendering import PRESENTATION_ROOT
 
 
 def create_app(settings: Settings | None = None, clock=None) -> FastAPI:
@@ -37,9 +40,12 @@ def create_app(settings: Settings | None = None, clock=None) -> FastAPI:
     app = FastAPI(title="COFRAP — Identité sécurisée", version="0.1.0", lifespan=lifespan)
     app.add_exception_handler(DomainError, errors.domain_error)
     app.add_exception_handler(RequestValidationError, errors.validation_error)
+    app.middleware("http")(browser_security)
     app.include_router(health_routes.router)
     app.include_router(enrollment_routes.router)
     app.include_router(auth_routes.router)
+    app.include_router(web_routes.router)
+    app.mount("/static", StaticFiles(directory=PRESENTATION_ROOT / "static"), name="static")
     return app
 
 

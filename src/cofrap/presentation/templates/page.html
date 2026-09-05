@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="htmx-config" content='{"historyCacheSize":0,"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false}'>
+  <meta name="description" content="Créez et protégez votre accès COFRAP avec une double authentification obligatoire.">
+  <title>COFRAP — Votre accès sécurisé</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body hx-headers='{"X-CSRF-Token":"{{ request.state.csrf }}"}' hx-target="#flow" hx-swap="innerHTML" hx-history="false">
+  <a class="skip" href="#flow">Aller au formulaire</a>
+  <header class="header">
+    <a href="/" class="brand" aria-label="COFRAP accueil"><span class="brand-mark" aria-hidden="true">c.</span>COFRAP<span class="brand-divider">/</span><span class="brand-sub">identité</span></a>
+    <nav aria-label="Navigation principale">
+      {% if request.cookies.get('cofrap_enrollment') %}<a href="/enrollment">Reprendre l’activation</a>{% endif %}
+      <a href="/login">Se connecter <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+  <main class="layout">
+    <section class="intro" aria-labelledby="intro-title">
+      <p class="eyebrow"><span class="status-dot"></span> VOTRE ESPACE DE CONFIANCE</p>
+      <h1 id="intro-title">Votre accès.<br><span>Sous contrôle.</span></h1>
+      <p class="lead">Des identifiants robustes, une double vérification.<br>La sécurité commence dès votre première connexion.</p>
+      <div class="identity-art" aria-hidden="true">
+        <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+        <div class="identity-card"><span class="card-caption">COFRAP ID</span><span class="card-symbol">c.</span><div class="card-line"></div><div class="card-line short"></div><span class="card-bottom">ACCÈS PROTÉGÉ <span>↗</span></span></div>
+        <span class="floating-label"><span class="status-dot"></span> Double authentification</span>
+      </div>
+      <div class="principles"><div><strong>24</strong><span>caractères générés</span></div><div><strong>2FA</strong><span>protection obligatoire</span></div><div><strong>6 mois</strong><span>avant renouvellement</span></div></div>
+    </section>
+    <section class="form-panel" aria-label="Gestion de votre accès">
+      <div class="panel-top"><span>ESPACE UTILISATEUR</span><span class="small-badge">ACCÈS SÉCURISÉ</span></div>
+      <div id="flow" tabindex="-1" aria-live="polite">{% include 'fragments/' ~ fragment_name ~ '.html' %}</div>
+      <p class="panel-foot">Vos identifiants vous appartiennent. Conservez-les à l’abri.</p>
+    </section>
+  </main>
+  <footer class="footer"><span>COFRAP · Gestion des identités</span><span>Preuve de concept <span class="footer-dot">·</span> 2026</span></footer>
+  <noscript><p class="noscript">Activez JavaScript pour utiliser les formulaires interactifs de cette démonstration.</p></noscript>
+</body>
+</html>

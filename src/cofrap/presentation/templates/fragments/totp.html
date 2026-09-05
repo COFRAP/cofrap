@@ -1,0 +1,11 @@
+<p class="step">03 / DOUBLE AUTHENTIFICATION</p>
+<h2>Deux preuves valent mieux qu’une.</h2>
+<p class="description">Scannez ce QR dans votre application d’authentification, puis saisissez le code à 6 chiffres qu’elle affiche.</p>
+<div id="feedback" role="alert"></div>
+<div class="qr-wrap" data-secret><img class="qr" src="{{ qr }}" alt="QR code de configuration TOTP pour {{ result.username }}" width="200" height="200"></div>
+<details data-secret><summary>Configurer sans scanner le QR</summary><p class="field-help">Ajoutez un compte TOTP : 6 chiffres, période de 30 secondes, SHA-1.</p><label for="totp-secret">Clé de configuration</label><input id="totp-secret" value="{{ result.secret }}" readonly class="secret-value" autocomplete="off" spellcheck="false"></details>
+<form hx-post="/web/enrollment/confirm" hx-disabled-elt="find button" method="post" action="/web/enrollment/confirm">
+  <label for="code">Code de votre application</label>
+  <input class="code-input" id="code" name="code" placeholder="000000" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="one-time-code" required>
+  <button class="primary" type="submit">Activer mon compte <span aria-hidden="true">→</span></button>
+</form>

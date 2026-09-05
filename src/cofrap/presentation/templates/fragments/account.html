@@ -1,0 +1,7 @@
+<span class="success-symbol" aria-hidden="true">✓</span>
+<p class="step">AUTHENTIFICATION RÉUSSIE</p>
+<h2>Bienvenue, {{ user.username }}.</h2>
+<p class="description">Votre identité a été vérifiée. Votre session est ouverte pour 30 minutes au maximum.</p>
+<div id="feedback" role="alert"></div>
+<dl class="account-info"><div><dt>État du compte</dt><dd><span class="status-dot"></span> Actif</dd></div><div><dt>Double authentification</dt><dd>Activée</dd></div><div><dt>Identifiants générés le</dt><dd>{{ user.generated_at.strftime('%d/%m/%Y') }}</dd></div><div><dt>Prochain renouvellement</dt><dd>{{ user.expires_at.strftime('%d/%m/%Y') }}</dd></div></dl>
+<form hx-post="/web/logout" hx-disabled-elt="find button" method="post" action="/web/logout"><button type="submit" class="secondary">Me déconnecter <span aria-hidden="true">↗</span></button></form>

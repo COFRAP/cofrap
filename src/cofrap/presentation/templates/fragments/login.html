@@ -1,0 +1,15 @@
+<p class="step">CONNEXION</p>
+<h2>Heureux de vous retrouver.</h2>
+<p class="description">Votre mot de passe et le code de votre application vous ouvrent les portes de votre espace.</p>
+<div id="feedback" role="alert"></div>
+<form hx-post="/web/login" hx-disabled-elt="find button" method="post" action="/web/login">
+  <label for="username">Nom d’utilisateur</label>
+  <input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="64" required placeholder="marie.dupont">
+  <label for="password">Mot de passe</label>
+  <input id="password" name="password" type="password" autocomplete="current-password" maxlength="128" required placeholder="Votre mot de passe de 24 caractères">
+  <label for="code">Code d’authentification</label>
+  <input class="code-input" id="code" name="code" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="one-time-code" required placeholder="000000" aria-describedby="totp-help">
+  <p id="totp-help" class="field-help">Le code à 6 chiffres de votre application d’authentification.</p>
+  <button class="primary" type="submit">Me connecter <span aria-hidden="true">→</span></button>
+</form>
+<p class="alternate">Pas encore de compte ? <a href="/">Créer mon accès</a></p>
