@@ -3,7 +3,7 @@ import secrets
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from cofrap.presentation.rendering import fragment
+from cofrap.frontend.rendering import fragment
 
 
 async def browser_security(request: Request, call_next):

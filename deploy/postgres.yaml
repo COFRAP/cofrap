@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: openfaas-fn
+spec:
+  selector:
+    app: cofrap-postgres
+  ports:
+    - port: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: openfaas-fn
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cofrap-postgres
+  template:
+    metadata:
+      labels:
+        app: cofrap-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          env:
+            - name: POSTGRES_USER
+              value: cofrap
+            - name: POSTGRES_DB
+              value: cofrap
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cofrap-postgres-password
+                  key: cofrap-postgres-password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "cofrap", "-d", "cofrap"]
+            initialDelaySeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 1Gi

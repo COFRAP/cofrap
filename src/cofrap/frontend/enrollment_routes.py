@@ -1,10 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 
-from cofrap.application.enrollment import EnrollmentService
 from cofrap.application.results import Enrollment
-from cofrap.presentation import dependencies
-from cofrap.presentation.qr import qr_data_url
-from cofrap.presentation.schemas import (
+from cofrap.contracts import (
     ConfirmRequest,
     EnrollmentResponse,
     PasswordResponse,
@@ -13,18 +10,18 @@ from cofrap.presentation.schemas import (
     TotpResponse,
     UserResponse,
 )
+from cofrap.frontend import dependencies
+from cofrap.frontend.openfaas_client import EnrollmentClient
 
 router = APIRouter(prefix="/api", tags=["Inscription et renouvellement"])
 
 
-def present_enrollment(result: Enrollment, base_url: str) -> EnrollmentResponse:
-    # Le fragment ne part ni dans les journaux HTTP ni dans l’en-tête Referer.
-    delivery_url = f"{base_url.rstrip('/')}/delivery#{result.delivery_token}"
+def present_enrollment(result: Enrollment) -> EnrollmentResponse:
     return EnrollmentResponse(
         user=UserResponse.model_validate(result.user),
         enrollment_token=result.enrollment_token,
-        delivery_url=delivery_url,
-        delivery_qr=qr_data_url(delivery_url),
+        delivery_url=result.delivery_url,
+        delivery_qr=result.delivery_qr,
         expires_at=result.expires_at,
     )
 
@@ -33,29 +30,27 @@ def present_enrollment(result: Enrollment, base_url: str) -> EnrollmentResponse:
 def register(
     data: RegisterRequest,
     request: Request,
-    service: EnrollmentService = Depends(dependencies.enrollment),
+    service: EnrollmentClient = Depends(dependencies.enrollment),
 ):
-    return present_enrollment(
-        service.register(data.username), str(request.app.state.settings.public_base_url)
-    )
+    return present_enrollment(service.register(data.username))
 
 
 @router.post("/password-deliveries/redeem", response_model=PasswordResponse)
-def redeem(data: TokenRequest, service: EnrollmentService = Depends(dependencies.enrollment)):
+def redeem(data: TokenRequest, service: EnrollmentClient = Depends(dependencies.enrollment)):
     return service.redeem_password(data.token)
 
 
 @router.post("/enrollment/totp", response_model=TotpResponse)
 def setup(
     token: str = Depends(dependencies.token),
-    service: EnrollmentService = Depends(dependencies.enrollment),
+    service: EnrollmentClient = Depends(dependencies.enrollment),
 ):
     result = service.setup_totp(token)
     return TotpResponse(
         username=result.username,
         secret=result.secret,
         provisioning_uri=result.provisioning_uri,
-        qr=qr_data_url(result.provisioning_uri),
+        qr=result.qr,
     )
 
 
@@ -63,7 +58,7 @@ def setup(
 def confirm(
     data: ConfirmRequest,
     token: str = Depends(dependencies.token),
-    service: EnrollmentService = Depends(dependencies.enrollment),
+    service: EnrollmentClient = Depends(dependencies.enrollment),
 ):
     return service.confirm_totp(token, data.code)
 
@@ -72,6 +67,6 @@ def confirm(
 def renew(
     request: Request,
     token: str = Depends(dependencies.token),
-    service: EnrollmentService = Depends(dependencies.enrollment),
+    service: EnrollmentClient = Depends(dependencies.enrollment),
 ):
-    return present_enrollment(service.renew(token), str(request.app.state.settings.public_base_url))
+    return present_enrollment(service.renew(token))

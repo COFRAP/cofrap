@@ -1,0 +1,2 @@
+# Dépendances communes installées depuis pyproject.toml et requirements.lock.
+# Ajouter ici uniquement les dépendances propres à cette fonction.

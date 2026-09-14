@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cofrap"
-version = "0.1.0"
-description = "PoC COFRAP : gestion sécurisée des identifiants avec FastAPI et HTMX"
+version = "0.2.0"
+description = "PoC COFRAP : fonctions OpenFaaS Python et frontend FastAPI / HTMX"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115,<1",
@@ -20,19 +20,21 @@ dependencies = [
   "qrcode[pil]>=8,<9",
   "jinja2>=3.1.6,<4",
   "python-multipart>=0.0.20,<1",
+  "httpx>=0.28,<1",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.3,<10", "httpx>=0.28,<1", "ruff>=0.11,<1"]
+dev = ["pytest>=8.3,<10", "ruff>=0.11,<1"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-cofrap = ["presentation/templates/**/*.html", "presentation/static/*"]
+cofrap = ["frontend/templates/**/*.html", "frontend/static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 markers = ["integration: nécessite PostgreSQL de test via Docker"]
 
 [tool.ruff]
@@ -43,4 +45,4 @@ line-length = 100
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
-"src/cofrap/presentation/*.py" = ["B008"]
+"src/cofrap/frontend/*.py" = ["B008"]

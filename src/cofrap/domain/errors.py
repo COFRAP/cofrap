@@ -29,3 +29,13 @@ class EnrollmentRequired(DomainError):
 class CredentialsExpired(DomainError):
     code = "credentials_expired"
     message = "Vos identifiants ont expiré. Reconnectez-vous pour les renouveler."
+
+
+class BackendUnavailable(DomainError):
+    code = "backend_unavailable"
+    message = "Le service est temporairement indisponible. Réessayez dans un instant."
+
+
+class InvalidInput(DomainError):
+    code = "validation_error"
+    message = "Vérifiez les champs saisis."

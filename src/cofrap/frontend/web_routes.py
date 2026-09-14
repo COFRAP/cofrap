@@ -3,15 +3,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
-from cofrap.application.authentication import AuthenticationService
-from cofrap.application.enrollment import EnrollmentService
 from cofrap.application.results import Enrollment, UserInfo
+from cofrap.contracts import ConfirmRequest, LoginRequest, RegisterRequest, TokenRequest
 from cofrap.domain.errors import InvalidToken
-from cofrap.presentation import dependencies
-from cofrap.presentation.enrollment_routes import present_enrollment
-from cofrap.presentation.qr import qr_data_url
-from cofrap.presentation.rendering import fragment, page
-from cofrap.presentation.schemas import ConfirmRequest, LoginRequest, RegisterRequest, TokenRequest
+from cofrap.frontend import dependencies
+from cofrap.frontend.enrollment_routes import present_enrollment
+from cofrap.frontend.openfaas_client import AuthenticationClient, EnrollmentClient
+from cofrap.frontend.rendering import fragment, page
 
 router = APIRouter(include_in_schema=False)
 
@@ -29,7 +27,7 @@ def set_private_cookie(response, request: Request, name: str, value: str, max_ag
 
 
 def show_enrollment(request: Request, result: Enrollment):
-    result_view = present_enrollment(result, str(request.app.state.settings.public_base_url))
+    result_view = present_enrollment(result)
     response = fragment(
         request, "enrollment", result=result_view, delivery_token=result.delivery_token
     )
@@ -68,21 +66,20 @@ def delivery_page(request: Request):
 @router.get("/enrollment")
 def resume_enrollment(
     request: Request,
-    service: EnrollmentService = Depends(dependencies.enrollment),
+    service: EnrollmentClient = Depends(dependencies.enrollment),
 ):
     token = request.cookies.get("cofrap_enrollment", "")
     user, redeemed = service.inspect(token)
     if redeemed:
         return page(request, "continue_enrollment", user=user)
     delivery_token = request.cookies.get("cofrap_delivery", "")
-    url = f"{str(request.app.state.settings.public_base_url).rstrip('/')}/delivery#{delivery_token}"
+    delivery = service.delivery_view(delivery_token)
     return page(
         request,
         "enrollment",
         result={
             "user": user,
-            "delivery_url": url,
-            "delivery_qr": qr_data_url(url),
+            **delivery,
         },
         delivery_token=delivery_token,
     )
@@ -104,7 +101,7 @@ def account(
 def register(
     request: Request,
     data: Annotated[RegisterRequest, Form()],
-    service: EnrollmentService = Depends(dependencies.enrollment),
+    service: EnrollmentClient = Depends(dependencies.enrollment),
 ):
     return show_enrollment(request, service.register(data.username))
 
@@ -113,7 +110,7 @@ def register(
 def redeem(
     request: Request,
     data: Annotated[TokenRequest, Form()],
-    service: EnrollmentService = Depends(dependencies.enrollment),
+    service: EnrollmentClient = Depends(dependencies.enrollment),
 ):
     result = service.redeem_password(data.token)
     response = fragment(request, "password", result=result)
@@ -124,17 +121,17 @@ def redeem(
 @router.post("/web/enrollment/totp")
 def setup_totp(
     request: Request,
-    service: EnrollmentService = Depends(dependencies.enrollment),
+    service: EnrollmentClient = Depends(dependencies.enrollment),
 ):
     result = service.setup_totp(request.cookies.get("cofrap_enrollment", ""))
-    return fragment(request, "totp", result=result, qr=qr_data_url(result.provisioning_uri))
+    return fragment(request, "totp", result=result, qr=result.qr)
 
 
 @router.post("/web/enrollment/confirm")
 def confirm_totp(
     request: Request,
     data: Annotated[ConfirmRequest, Form()],
-    service: EnrollmentService = Depends(dependencies.enrollment),
+    service: EnrollmentClient = Depends(dependencies.enrollment),
 ):
     user = service.confirm_totp(request.cookies.get("cofrap_enrollment", ""), data.code)
     response = fragment(request, "activated", user=user)
@@ -147,7 +144,7 @@ def confirm_totp(
 def login(
     request: Request,
     data: Annotated[LoginRequest, Form()],
-    service: AuthenticationService = Depends(dependencies.authentication),
+    service: AuthenticationClient = Depends(dependencies.authentication),
 ):
     result = service.authenticate(data.username, data.password.get_secret_value(), data.code)
     if result.status == "renewal_required":
@@ -166,12 +163,12 @@ def login(
 
 
 @router.post("/web/renew")
-def renew(request: Request, service: EnrollmentService = Depends(dependencies.enrollment)):
+def renew(request: Request, service: EnrollmentClient = Depends(dependencies.enrollment)):
     return show_enrollment(request, service.renew(request.cookies.get("cofrap_renewal", "")))
 
 
 @router.post("/web/logout")
-def logout(request: Request, service: AuthenticationService = Depends(dependencies.authentication)):
+def logout(request: Request, service: AuthenticationClient = Depends(dependencies.authentication)):
     try:
         service.logout(request.cookies.get("cofrap_session", ""))
     except InvalidToken:

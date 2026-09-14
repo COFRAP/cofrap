@@ -22,11 +22,21 @@ test-integration:
 	.venv/bin/pytest --integration -q
 
 lint:
-	.venv/bin/ruff check src tests migrations scripts
-	.venv/bin/ruff format --check src tests migrations scripts
+	.venv/bin/ruff check src functions tests migrations scripts
+	.venv/bin/ruff format --check src functions tests migrations scripts
 
 format:
-	.venv/bin/ruff format src tests migrations scripts
-	.venv/bin/ruff check --fix src tests migrations scripts
+	.venv/bin/ruff format src functions tests migrations scripts
+	.venv/bin/ruff check --fix src functions tests migrations scripts
 
 check: lint test
+
+.PHONY: functions-up functions-build functions-down
+functions-build:
+	docker compose -f compose.yaml -f compose.functions.yaml build
+
+functions-up:
+	docker compose -f compose.yaml -f compose.functions.yaml up -d --build --wait
+
+functions-down:
+	docker compose -f compose.yaml -f compose.functions.yaml down

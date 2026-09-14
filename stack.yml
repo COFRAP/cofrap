@@ -1,0 +1,83 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: ${OPENFAAS_URL}
+
+functions:
+  generate-password:
+    lang: dockerfile
+    handler: .
+    image: ${OPENFAAS_PREFIX}/cofrap-generate-password:${IMAGE_TAG}
+    build_args:
+      FUNCTION_NAME: generate-password
+    environment:
+      POSTGRES_HOST: postgres.openfaas-fn.svc.cluster.local
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: cofrap
+      POSTGRES_USER: cofrap
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+    secrets:
+      - cofrap-postgres-password
+      - cofrap-encryption-key
+    labels:
+      com.openfaas.scale.min: "1"
+      com.openfaas.scale.max: "3"
+      com.openfaas.scale.zero: "true"
+      com.openfaas.scale.zero-duration: "10m"
+    limits:
+      memory: 512Mi
+    requests:
+      memory: 128Mi
+      cpu: 50m
+
+  generate-2fa:
+    lang: dockerfile
+    handler: .
+    image: ${OPENFAAS_PREFIX}/cofrap-generate-2fa:${IMAGE_TAG}
+    build_args:
+      FUNCTION_NAME: generate-2fa
+    environment:
+      POSTGRES_HOST: postgres.openfaas-fn.svc.cluster.local
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: cofrap
+      POSTGRES_USER: cofrap
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+    secrets:
+      - cofrap-postgres-password
+      - cofrap-encryption-key
+    labels:
+      com.openfaas.scale.min: "1"
+      com.openfaas.scale.max: "3"
+      com.openfaas.scale.zero: "true"
+      com.openfaas.scale.zero-duration: "10m"
+    limits:
+      memory: 512Mi
+    requests:
+      memory: 128Mi
+      cpu: 50m
+
+  authenticate:
+    lang: dockerfile
+    handler: .
+    image: ${OPENFAAS_PREFIX}/cofrap-authenticate:${IMAGE_TAG}
+    build_args:
+      FUNCTION_NAME: authenticate
+    environment:
+      POSTGRES_HOST: postgres.openfaas-fn.svc.cluster.local
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: cofrap
+      POSTGRES_USER: cofrap
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+    secrets:
+      - cofrap-postgres-password
+      - cofrap-encryption-key
+    labels:
+      com.openfaas.scale.min: "1"
+      com.openfaas.scale.max: "3"
+      com.openfaas.scale.zero: "true"
+      com.openfaas.scale.zero-duration: "10m"
+    limits:
+      memory: 512Mi
+    requests:
+      memory: 128Mi
+      cpu: 50m

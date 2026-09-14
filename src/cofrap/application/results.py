@@ -33,6 +33,8 @@ class Enrollment:
     enrollment_token: str
     delivery_token: str
     expires_at: datetime
+    delivery_url: str = ""
+    delivery_qr: str = ""
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,7 @@ class TotpSetup:
     username: str
     secret: str
     provisioning_uri: str
+    qr: str = ""
 
 
 @dataclass(frozen=True)

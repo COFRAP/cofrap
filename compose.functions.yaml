@@ -1,0 +1,78 @@
+# Local HTTP development: Nginx replaces only the gateway routing.
+# This does not install OpenFaaS/Kubernetes or provide scale-to-zero.
+x-function: &function
+  env_file: .env
+  environment:
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  migrate:
+    image: cofrap-migrate:local
+    build:
+      context: .
+      args:
+        FUNCTION_NAME: generate-password
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  generate-password:
+    <<: *function
+    image: cofrap-generate-password:local
+    build:
+      context: .
+      args:
+        FUNCTION_NAME: generate-password
+
+  generate-2fa:
+    <<: *function
+    image: cofrap-generate-2fa:local
+    build:
+      context: .
+      args:
+        FUNCTION_NAME: generate-2fa
+
+  authenticate:
+    <<: *function
+    image: cofrap-authenticate:local
+    build:
+      context: .
+      args:
+        FUNCTION_NAME: authenticate
+
+  gateway:
+    image: nginx:1.28-alpine
+    volumes:
+      - ./deploy/local-gateway.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      generate-password:
+        condition: service_healthy
+      generate-2fa:
+        condition: service_healthy
+      authenticate:
+        condition: service_healthy
+
+  frontend:
+    image: cofrap-frontend:local
+    build:
+      context: .
+      target: frontend
+    environment:
+      OPENFAAS_GATEWAY_URL: http://gateway:8080
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      - gateway

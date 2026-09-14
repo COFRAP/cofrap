@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from cryptography.fernet import Fernet
 from pydantic import AnyHttpUrl, SecretStr, field_validator
@@ -41,4 +42,12 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    values = {}
+    for field, name in (
+        ("postgres_password", "cofrap-postgres-password"),
+        ("encryption_key", "cofrap-encryption-key"),
+    ):
+        path = Path("/var/openfaas/secrets") / name
+        if path.is_file():
+            values[field] = path.read_text().strip()
+    return Settings(**values)

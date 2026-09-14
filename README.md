@@ -1,6 +1,6 @@
 # COFRAP — Identité sécurisée
 
-Backend **FastAPI / Pydantic**, persistance **PostgreSQL sous Docker**, interface
+Backend **trois fonctions OpenFaaS Python**, persistance **PostgreSQL**, interface
 **HTMX / Jinja2** servie par Python. Le PoC couvre l’inscription, la remise unique
 du mot de passe, l’activation TOTP, la connexion et le renouvellement après six mois.
 
@@ -10,9 +10,7 @@ Prérequis : Python 3.12+, Docker avec Compose, `make` facultatif.
 
 ```sh
 make setup
-make db
-make migrate
-make dev
+make functions-up
 ```
 
 Ouvrir **http://localhost:8000**. Documentation interactive de l’API :
@@ -24,9 +22,7 @@ Sans `make` :
 python3 -m venv .venv
 .venv/bin/pip install -c requirements.lock -e '.[dev]'
 .venv/bin/python scripts/init_env.py
-docker compose up -d --wait postgres
-.venv/bin/alembic upgrade head
-.venv/bin/uvicorn cofrap.main:app --reload --host 127.0.0.1 --port 8000
+docker compose -f compose.yaml -f compose.functions.yaml up -d --build --wait
 ```
 
 `init_env.py` crée `.env` avec des secrets aléatoires et des permissions `0600`,
@@ -36,7 +32,7 @@ vérifiées sont fixées dans `requirements.lock`.
 PostgreSQL est publié sur **127.0.0.1:55432**, avec le volume persistant
 `cofrap_postgres_data`. `docker compose stop postgres` et `docker compose down`
 conservent les données ; ajouter `-v` les détruit. Les migrations sont explicites,
-jamais lancées automatiquement au démarrage de l’API.
+exécutées par le conteneur `migrate` avant le démarrage des fonctions.
 
 ## Essayer le parcours
 
@@ -59,7 +55,8 @@ du lien ne consomme rien : seule une confirmation POST révèle le mot de passe.
 Le QR TOTP configure l’application ; ce n’est pas un lien de remise unique.
 
 Pour un téléphone, `localhost` désigne le téléphone : définir
-`PUBLIC_BASE_URL=http://IP_DU_POSTE:8000` dans `.env`, redémarrer avec `--host 0.0.0.0`,
+`PUBLIC_BASE_URL=http://IP_DU_POSTE:8000` dans `.env`, publier le port du frontend
+sur cette interface dans `compose.functions.yaml`,
 et ouvrir **cette même adresse** sur le poste et le téléphone, sur un réseau de confiance.
 La base reste limitée à loopback. Utiliser HTTPS et `COOKIE_SECURE=true` dès que
 l’application sort du développement local.
@@ -67,22 +64,29 @@ l’application sort du développement local.
 ## Architecture
 
 ```text
+functions/
+├── generate-password/  # handler.py, service.py, requirements.txt
+├── generate-2fa/       # handler.py, service.py, requirements.txt
+└── authenticate/       # handler.py, service.py, requirements.txt
 src/cofrap/
-├── domain/          # Entités, règles, erreurs ; aucune dépendance web ou SQL
-├── application/     # Cas d’usage et interfaces des adaptateurs
-├── infrastructure/  # PostgreSQL, chiffrement, TOTP, configuration
-├── presentation/    # Routes JSON / HTML, schémas Pydantic, templates HTMX
-└── main.py          # Assemblage des dépendances et cycle de vie de l’application
+├── frontend/           # FastAPI / HTMX et appels HTTP à OpenFaaS
+├── domain/             # Entités, règles et erreurs partagées
+├── application/        # Ports, résultats et autorisations partagés
+├── infrastructure/     # PostgreSQL, chiffrement, TOTP, QR
+├── contracts.py        # Validation des entrées et réponses
+└── function_runtime.py # Cycle de vie commun des fonctions
+stack.yml               # Trois images et déploiements OpenFaaS
+Dockerfile              # Construction depuis le package partagé
+deploy/                # PostgreSQL, migration et frontend Kubernetes
 ```
 
-Les routes valident les entrées et présentent les résultats. Les cas d’usage
-orchestrent le domaine via des interfaces. Les adaptateurs implémentent ces
-interfaces. Les routes JSON et HTML partagent les mêmes services. Une transaction
-couvre chaque opération métier, avec verrouillage des lignes pour la remise unique
-et le rejet des codes TOTP rejoués. La contrainte unique PostgreSQL arbitre les
-créations concurrentes. HTMX est servi localement et ne contient aucune règle métier.
+FastAPI appelle les trois fonctions par HTTP via la passerelle ; seules les
+fonctions accèdent à PostgreSQL et génèrent les QR. Une transaction couvre chaque
+opération métier, avec verrouillage des lignes pour les remises et codes TOTP.
 
-Voir [l’architecture et les choix de sécurité](docs/architecture.md).
+Le démarrage Docker local utilise une passerelle Nginx de développement. Pour
+OpenFaaS sur Kubernetes/Minikube, suivre le [guide de déploiement](docs/openfaas.md).
+Voir aussi [l’architecture et les choix de stockage](docs/architecture.md).
 
 ## API JSON
 
@@ -132,8 +136,8 @@ L’horloge injectable simule l’expiration sans endpoint de falsification des 
 
 ## Limites du PoC
 
-- Livraison limitée au backend, PostgreSQL et HTMX ; OpenFaaS / Kubernetes et les
-  livrables de gestion de projet restent en dehors de cette étape.
+- Le mode Docker local ne fournit pas de scale-to-zero. Les manifests OpenFaaS /
+  Kubernetes sont fournis ; le scale-to-zero nécessite l’autoscaler de l’édition adaptée.
 - Une session par compte ; une nouvelle connexion remplace la précédente.
   Le navigateur conserve un seul parcours d’activation à la fois.
 - Activation / remise : **15 minutes** ; renouvellement : **5 minutes** ;

@@ -2,23 +2,9 @@ from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from cofrap.domain.errors import (
-    CredentialsExpired,
-    DomainError,
-    EnrollmentRequired,
-    InvalidCredentials,
-    InvalidToken,
-    UsernameTaken,
-)
-from cofrap.presentation.rendering import fragment, page
-
-STATUSES = {
-    UsernameTaken: 409,
-    InvalidCredentials: 401,
-    InvalidToken: 401,
-    EnrollmentRequired: 409,
-    CredentialsExpired: 403,
-}
+from cofrap.domain.errors import DomainError
+from cofrap.frontend.rendering import fragment, page
+from cofrap.http_errors import STATUSES
 
 
 async def domain_error(request: Request, exc: DomainError):

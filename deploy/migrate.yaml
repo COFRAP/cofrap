@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cofrap-migrate
+  namespace: openfaas-fn
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: cofrap/cofrap-generate-password:local
+          imagePullPolicy: IfNotPresent
+          command: ["alembic", "upgrade", "head"]
+          env:
+            - name: POSTGRES_HOST
+              value: postgres.openfaas-fn.svc.cluster.local
+            - name: POSTGRES_PORT
+              value: "5432"
+          volumeMounts:
+            - name: password
+              mountPath: /var/openfaas/secrets/cofrap-postgres-password
+              subPath: cofrap-postgres-password
+              readOnly: true
+            - name: encryption
+              mountPath: /var/openfaas/secrets/cofrap-encryption-key
+              subPath: cofrap-encryption-key
+              readOnly: true
+      volumes:
+        - name: password
+          secret:
+            secretName: cofrap-postgres-password
+        - name: encryption
+          secret:
+            secretName: cofrap-encryption-key

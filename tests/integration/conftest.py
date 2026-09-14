@@ -1,6 +1,9 @@
+import importlib
+from contextlib import ExitStack
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import pytest
 from alembic import command
 from alembic.config import Config
@@ -8,6 +11,8 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
+from cofrap.frontend.openfaas_client import FUNCTIONS
+from cofrap.frontend.settings import FrontendSettings
 from cofrap.infrastructure.database import create_session_factory
 from cofrap.infrastructure.settings import Settings
 from cofrap.main import create_app
@@ -62,5 +67,29 @@ def client(settings, database, clock):
     with database() as session:
         session.execute(text("TRUNCATE TABLE users"))
         session.commit()
-    with TestClient(create_app(settings, clock)) as client:
+    with ExitStack() as stack:
+        functions = {}
+        for name in FUNCTIONS:
+            module = importlib.import_module(f"functions.{name}.handler")
+            functions[name] = stack.enter_context(TestClient(module.create_app(settings, clock)))
+
+        def forward(request):
+            _, _, name, path = request.url.path.split("/", 3)
+            response = functions[name].request(
+                request.method,
+                "/" + path,
+                content=request.content,
+                headers={"Content-Type": "application/json"},
+            )
+            return httpx.Response(
+                response.status_code,
+                content=response.content,
+                headers=response.headers,
+            )
+
+        frontend = FrontendSettings(_env_file=None, public_base_url=settings.public_base_url)
+        client = stack.enter_context(
+            TestClient(create_app(frontend, transport=httpx.MockTransport(forward)))
+        )
+        client.function_clients = functions
         yield client

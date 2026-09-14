@@ -4,29 +4,28 @@
 
 ```mermaid
 flowchart LR
-    Browser[Navigateur HTMX] --> HTML[Routes HTML]
-    Client[Client JSON] --> API[Routes API / Pydantic]
-    HTML --> App[Services applicatifs]
-    API --> App
-    App --> Domain[Domaine Python]
-    App --> Ports[Interfaces de persistance et sécurité]
-    SQL[Adaptateur SQLAlchemy] -. implémente .-> Ports
-    Crypto[Argon2 / Fernet / TOTP] -. implémente .-> Ports
-    SQL --> DB[(PostgreSQL)]
+    Browser[Navigateur HTMX] --> Frontend[FastAPI frontend]
+    Frontend --> Gateway[Passerelle OpenFaaS]
+    Gateway --> Password[generate-password]
+    Gateway --> Totp[generate-2fa]
+    Gateway --> Auth[authenticate]
+    Password --> DB[(PostgreSQL : users)]
+    Totp --> DB
+    Auth --> DB
 ```
 
-`main.py` assemble configuration, pool SQL, adaptateurs, services et routes.
-Les paramètres utilisent Pydantic Settings. Les services reçoivent une fabrique
-de transactions et une horloge pour tester les échéances sans modifier les routes.
+`frontend/main.py` assemble le client HTTP et les routes HTML/JSON. Il ne crée
+aucun pool SQL et ne reçoit pas la clé de chiffrement. Les QR sont produits par
+les fonctions, puis affichés par le frontend.
 
-Python répond au contexte COFRAP. FastAPI expose les schémas Pydantic et OpenAPI.
-PostgreSQL fournit persistance, contraintes et verrouillage transactionnel. HTMX
-permet des formulaires progressifs sans dupliquer les règles métier en JavaScript.
+Chaque dossier `functions/<nom>/` contient les handlers et son service métier.
+`function_runtime.py` assemble un pool SQL, les adaptateurs et uniquement le service
+concerné. Les modèles, contrats et utilitaires communs sont installés dans chaque
+image depuis `src/cofrap`. Aucune fonction n’appelle le frontend.
 
-Références : [organisation FastAPI](https://fastapi.tiangolo.com/tutorial/bigger-applications/),
-[configuration](https://fastapi.tiangolo.com/advanced/settings/),
-[cycle de vie](https://fastapi.tiangolo.com/advanced/events/),
-[documentation HTMX](https://htmx.org/docs/).
+Les fonctions reçoivent une fabrique de transactions et une horloge injectable.
+La séparation HTTP conserve les erreurs métier et les dates via des contrats typés.
+Voir [les opérations, la construction et le déploiement](openfaas.md).
 
 ## États et autorisations
 
@@ -121,6 +120,15 @@ interactions JavaScript n’ont pas été vérifiés dans le navigateur intégr�
 navigateur n’était disponible dans la session d’implémentation.
 
 La récupération de compte, la limitation de débit et les invitations ne sont pas
-implémentées. La maîtrise des abus reste prévue pour l’autre équipe. Ce service
-n’est pas encore déployé sur OpenFaaS ; les cas d’usage peuvent être réutilisés
-par de futurs adaptateurs serverless sans recopier les règles métier.
+implémentées. La maîtrise des abus reste prévue pour l’autre équipe. Les trois fonctions sont empaquetées pour OpenFaaS. Le mode Docker local utilise
+une passerelle de développement ; la validation du déploiement Kubernetes et du
+scale-to-zero doit être effectuée sur un cluster disposant de l’édition adaptée.
+
+
+## Interprétation du cahier des charges
+
+Cette réorganisation conserve les règles existantes. Le QR du mot de passe contient
+un lien à remise unique plutôt que le mot de passe lui-même. Le mot de passe est
+chiffré jusqu’à sa remise puis seul son hachage est conservé. La date de début des
+six mois est celle de l’activation du couple d’identifiants. Ces trois choix doivent
+être explicités lors de la comparaison avec une lecture littérale du sujet.
