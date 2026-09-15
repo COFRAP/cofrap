@@ -164,6 +164,13 @@ Dans `deploy/kustomization.yaml`, remplacer `registry.example.com/cofrap` et
 - `COFRAP_HOST`, nom DNS seul utilisé par l’Ingress ;
 - `STORAGE_CLASS`, classe CSI retenue pour PostgreSQL.
 
+L’Ingress redirige HTTP vers HTTPS via le middleware Traefik
+[`RedirectScheme`](https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/redirectscheme/).
+Ouvrir l’adresse définie par `PUBLIC_BASE_URL` : le frontend utilise
+`COOKIE_SECURE=true` et contrôle l’origine des formulaires. Sans cette redirection,
+une ouverture en HTTP peut afficher « Session du formulaire expirée » dès le premier
+envoi : les cookies exigent HTTPS et l’origine HTTP diffère de celle configurée.
+
 La valeur k3s `local-path` fonctionne sur un cluster standard mais attache les données
 au disque d’un seul nœud. Une panne de ce nœud rend la base indisponible. Pour une
 replanification sur un autre nœud, utiliser une classe CSI répliquée telle que Longhorn
