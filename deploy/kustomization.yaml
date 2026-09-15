@@ -14,11 +14,11 @@ resources:
 # immutable release tag before deploying.
 images:
   - name: cofrap-generate-password
-    newName: registry.example.com/cofrap/cofrap-generate-password
-    newTag: replace-with-git-sha
+    newName: ghcr.io/cofrap/cofrap-generate-password
+    newTag: 5c594a215caf
   - name: cofrap-frontend
-    newName: registry.example.com/cofrap/cofrap-frontend
-    newTag: replace-with-git-sha
+    newName: ghcr.io/cofrap/cofrap-frontend
+    newTag: 5c594a215caf
 
 replacements:
   - source:

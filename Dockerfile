@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -c requirements.lock .
 RUN useradd --uid 10001 --create-home app
 
 FROM base AS frontend
-USER app
+USER 10001
 EXPOSE 8000
 CMD ["uvicorn", "cofrap.frontend.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
 
@@ -28,7 +28,7 @@ COPY --chmod=755 --from=watchdog /fwatchdog /usr/local/bin/fwatchdog
 ENV mode=http upstream_url=http://127.0.0.1:5000 \
     fprocess="uvicorn function.handler:app --app-dir /app --host 127.0.0.1 --port 5000 --no-access-log" \
     read_timeout=60s write_timeout=60s exec_timeout=60s
-USER app
+USER 10001
 EXPOSE 8080
 HEALTHCHECK --interval=5s --timeout=3s --start-period=15s CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/_/health', timeout=2)"]
 CMD ["fwatchdog"]

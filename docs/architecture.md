@@ -126,7 +126,10 @@ implémentées. La maîtrise des abus reste prévue pour l’autre équipe. Les 
 fonctions sont empaquetées pour OpenFaaS. Le mode Docker local utilise une passerelle
 de développement. Le déploiement k3s fournit un registre partagé, un Ingress TLS et
 une répartition préférentielle du frontend ; le placement multi-nœuds, le stockage,
-la perte d’un nœud et le scale-to-zero doivent être validés sur le cluster cible.
+et la perte d’un nœud doivent être validés sur le cluster cible. Le scale-to-zero
+natif est exclu du PoC, qui conserve OpenFaaS Community gratuit : il nécessite
+OpenFaaS Standard/Pro et son autoscaler sous licence. Chaque fonction conserve
+au moins un réplica. Voir [la justification](openfaas.md#scale-to-zero).
 
 
 ## Interprétation du cahier des charges

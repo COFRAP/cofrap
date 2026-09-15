@@ -74,9 +74,11 @@ côté frontend et fonctions pour que les QR pointent vers le bon navigateur.
 
 ## Déploiement sur k3s multi-nœuds
 
-Le déploiement cible un serveur k3s et un ou plusieurs agents. OpenFaaS doit être
-installé dans `openfaas` et `openfaas-fn` selon son
+Le déploiement cible un serveur k3s et un ou plusieurs agents. Le PoC utilise
+OpenFaaS Community gratuit, installé dans `openfaas` et `openfaas-fn` selon le
 [guide Kubernetes officiel](https://docs.openfaas.com/deployment/kubernetes/).
+Le scale-to-zero natif est exclu du PoC pour conserver cette édition gratuite ;
+la justification et l’évolution possible sont décrites plus bas.
 Le frontend est isolé dans le namespace `cofrap` et exposé par l’Ingress Traefik
 fourni par défaut avec k3s.
 
@@ -187,6 +189,18 @@ kubectl apply --dry-run=server -f /tmp/cofrap-k3s.yaml
 
 ### Secrets et déploiement
 
+Dans le terminal de déploiement, exporter à nouveau `OPENFAAS_URL`,
+`OPENFAAS_PREFIX`, `IMAGE_TAG` et `PUBLIC_BASE_URL` si celui de la construction
+a été fermé. `faas-cli` substitue ces variables dans `stack.yml` ; il ne lit pas
+les valeurs de `deploy/kustomization.yaml` ni de `deploy/deployment-config.yaml`.
+Le registre et le tag doivent correspondre aux images publiées et à la migration,
+et l’URL publique à celle du frontend. Les guillemets du YAML ne remplacent pas
+ces valeurs obligatoires. Vérifier les images et les URL avant de déployer :
+
+```sh
+faas-cli generate -f stack.yml
+```
+
 Créer deux secrets OpenFaaS à partir de fichiers contenant uniquement leur valeur :
 mot de passe PostgreSQL et clé Fernet. Conserver la même clé pour les trois fonctions,
 la sauvegarder dans un coffre et garder ces fichiers hors Git.
@@ -206,6 +220,13 @@ Appliquer la base seule, attendre qu’elle soit prête, puis appliquer le rendu
 Supprimer le Job terminé garantit que les migrations de la version courante sont
 réellement rejouées. Le Job utilise exactement l’image `generate-password` publiée
 avec les fonctions.
+
+Les conteneurs de migration et du frontend utilisent explicitement l’UID `10001`,
+celui de l’utilisateur `app` dans le Dockerfile. Kubernetes peut ainsi vérifier
+`runAsNonRoot`, y compris avec les anciennes images qui déclarent `USER app`.
+Après une modification du Job, le supprimer puis le recréer avec les commandes
+ci-dessous : son template de pod est immuable. Cela vaut aussi pour un Job bloqué
+en `CreateContainerConfigError`.
 
 ```sh
 kubectl apply -k deploy --selector app=cofrap-postgres
@@ -240,15 +261,41 @@ contrairement à un simple test depuis la machine de construction.
 
 ## Scale to Zero
 
-`stack.yml` active les labels `com.openfaas.scale.zero` et
-`com.openfaas.scale.zero-duration: 10m`. Leur effet nécessite une édition OpenFaaS
-avec l’autoscaler approprié et `autoscaler.enabled: true` dans sa configuration
-Helm ; les labels seuls ne suffisent pas. Voir le
+### Pourquoi il est absent du PoC
+
+Le scale-to-zero arrête les réplicas d’une fonction après une période sans trafic
+et les recrée à la première requête. Cette fonctionnalité native nécessite
+OpenFaaS Standard/Pro avec une licence et son autoscaler. Le PoC conserve
+OpenFaaS Community gratuit : le scale-to-zero n’est donc pas implémenté.
+Voir le
 [guide officiel Scale to Zero](https://docs.openfaas.com/openfaas-pro/scale-to-zero/).
 
-Le frontend et PostgreSQL restent disponibles. Les fonctions ne conservent aucun
-état utilisateur en mémoire ; leurs pools SQL sont recréés au redémarrage.
-`OPENFAAS_TIMEOUT=60` laisse une marge au redémarrage d’une fonction.
+Sur le cluster du PoC, la passerelle refuse le déploiement avec l’erreur :
+
+```text
+validation failed: com.openfaas.scale.zero not available for Community Edition
+```
+
+Les labels `com.openfaas.scale.zero` et `com.openfaas.scale.zero-duration` sont
+donc absents de `stack.yml`. Chaque fonction conserve au moins un réplica
+(`com.openfaas.scale.min: "1"`), même sans trafic, et continue de consommer des
+ressources. Le frontend et PostgreSQL restent également actifs. Aucun composant
+externe de mise à zéro n’est installé dans le PoC.
+
+### Évolution possible avec Standard/Pro
+
+Après installation d’une édition compatible et de son autoscaler avec
+`autoscaler.enabled: true`, ajouter aux labels de chacune des trois fonctions :
+
+```yaml
+com.openfaas.scale.zero: "true"
+com.openfaas.scale.zero-duration: "10m"
+```
+
+Le minimum de `1` correspond alors au nombre de réplicas actifs après réveil.
+Les fonctions ne conservent aucun état utilisateur en mémoire ; leurs pools SQL
+sont recréés au redémarrage. `OPENFAAS_TIMEOUT=60` laisse une marge au démarrage
+à froid, à valider sur le cluster équipé.
 
 Les probes Kubernetes du frontend utilisent `/health/live`. Ne pas sonder en
 boucle son `/health/ready` : ce diagnostic appelle les trois fonctions, vérifie

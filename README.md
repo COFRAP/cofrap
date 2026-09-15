@@ -138,8 +138,10 @@ L’horloge injectable simule l’expiration sans endpoint de falsification des 
 
 ## Limites du PoC
 
-- Le mode Docker local ne fournit pas de scale-to-zero. Les manifests OpenFaaS /
-  Kubernetes sont fournis ; le scale-to-zero nécessite l’autoscaler de l’édition adaptée.
+- Le scale-to-zero est exclu du PoC : il utilise OpenFaaS Community gratuit,
+  alors que cette fonctionnalité native nécessite OpenFaaS Standard/Pro et son
+  autoscaler sous licence. Chaque fonction conserve au moins un réplica, même
+  sans trafic. Voir [la justification et l’évolution possible](docs/openfaas.md#scale-to-zero).
 - Une session par compte ; une nouvelle connexion remplace la précédente.
   Le navigateur conserve un seul parcours d’activation à la fois.
 - Activation / remise : **15 minutes** ; renouvellement : **5 minutes** ;

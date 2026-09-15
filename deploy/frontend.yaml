@@ -45,6 +45,7 @@ spec:
             capabilities:
               drop: ["ALL"]
             runAsNonRoot: true
+            runAsUser: 10001
           readinessProbe:
             httpGet:
               path: /health/live
