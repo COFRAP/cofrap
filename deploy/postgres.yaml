@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: postgres
   namespace: openfaas-fn
+  labels:
+    app: cofrap-postgres
 spec:
   selector:
     app: cofrap-postgres
@@ -14,6 +16,8 @@ kind: StatefulSet
 metadata:
   name: postgres
   namespace: openfaas-fn
+  labels:
+    app: cofrap-postgres
 spec:
   serviceName: postgres
   replicas: 1
@@ -25,6 +29,7 @@ spec:
       labels:
         app: cofrap-postgres
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: postgres
           image: postgres:17-alpine
@@ -42,6 +47,12 @@ spec:
               value: /var/lib/postgresql/data/pgdata
           ports:
             - containerPort: 5432
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
           readinessProbe:
             exec:
               command: ["pg_isready", "-U", "cofrap", "-d", "cofrap"]
@@ -54,6 +65,7 @@ spec:
         name: data
       spec:
         accessModes: [ReadWriteOnce]
+        storageClassName: local-path
         resources:
           requests:
             storage: 1Gi

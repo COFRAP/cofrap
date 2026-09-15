@@ -77,15 +77,17 @@ et le jeton, puis commit avant de répondre. Une requête simultanée échoue. S
 réponse réseau est perdue après commit, le mot de passe n’est pas récupérable :
 c’est le compromis explicite d’une remise à usage unique.
 
-La clé Fernet et les credentials DB sont lus depuis `.env` en développement ou
-les variables d’environnement. Ils ne sont ni dans Git ni dans les templates.
+La clé Fernet et les credentials DB sont lus depuis `.env` en développement. Sur
+k3s, les fonctions et la migration les lisent dans les secrets montés sous
+`/var/openfaas/secrets/`. Ils ne sont ni dans Git ni dans les templates.
 Les paramètres SQL ne sont pas journalisés.
 
 ## Frontend et HTTP
 
 - Cookies `HttpOnly`, `SameSite=Strict`, et `Secure` avec `COOKIE_SECURE=true` sous HTTPS.
 - Les écritures HTML exigent un jeton CSRF HTMX correspondant au cookie.
-  L’origine est contrôlée si fournie : `PUBLIC_BASE_URL` doit correspondre au navigateur.
+  L’origine est contrôlée si fournie : sur k3s, `PUBLIC_BASE_URL` doit être l’origine
+  HTTPS exposée par l’Ingress et `COOKIE_SECURE` doit rester à `true`.
 - Les routes JSON utilisent exclusivement les jetons Bearer, sans authentification
   implicite par cookie de session.
 - Réponses `no-store`, `no-referrer`, interdiction d’encadrement et CSP avec
@@ -120,9 +122,11 @@ interactions JavaScript n’ont pas été vérifiés dans le navigateur intégr�
 navigateur n’était disponible dans la session d’implémentation.
 
 La récupération de compte, la limitation de débit et les invitations ne sont pas
-implémentées. La maîtrise des abus reste prévue pour l’autre équipe. Les trois fonctions sont empaquetées pour OpenFaaS. Le mode Docker local utilise
-une passerelle de développement ; la validation du déploiement Kubernetes et du
-scale-to-zero doit être effectuée sur un cluster disposant de l’édition adaptée.
+implémentées. La maîtrise des abus reste prévue pour l’autre équipe. Les trois
+fonctions sont empaquetées pour OpenFaaS. Le mode Docker local utilise une passerelle
+de développement. Le déploiement k3s fournit un registre partagé, un Ingress TLS et
+une répartition préférentielle du frontend ; le placement multi-nœuds, le stockage,
+la perte d’un nœud et le scale-to-zero doivent être validés sur le cluster cible.
 
 
 ## Interprétation du cahier des charges

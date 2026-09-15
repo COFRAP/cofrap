@@ -72,72 +72,171 @@ make dev
 `OPENFAAS_GATEWAY_URL` désigne la passerelle. `PUBLIC_BASE_URL` doit être identique
 côté frontend et fonctions pour que les QR pointent vers le bon navigateur.
 
-## Déploiement sur Minikube
+## Déploiement sur k3s multi-nœuds
 
-Prérequis : Docker, Minikube, kubectl, faas-cli et une installation OpenFaaS dans
-les namespaces `openfaas` et `openfaas-fn`. Installer la plateforme selon le
-[guide officiel](https://docs.openfaas.com/deployment/kubernetes/), après :
+Le déploiement cible un serveur k3s et un ou plusieurs agents. OpenFaaS doit être
+installé dans `openfaas` et `openfaas-fn` selon son
+[guide Kubernetes officiel](https://docs.openfaas.com/deployment/kubernetes/).
+Le frontend est isolé dans le namespace `cofrap` et exposé par l’Ingress Traefik
+fourni par défaut avec k3s.
+
+Prérequis :
+
+- `kubectl`, `faas-cli`, Docker/BuildKit et Kustomize sur la machine de construction ;
+- tous les nœuds k3s en état `Ready` et à l’heure ;
+- un registre HTTPS résolu et joignable par la machine de construction et chaque nœud ;
+- un nom DNS public dirigé vers Traefik et un certificat TLS correspondant ;
+- une classe de stockage choisie et une stratégie de sauvegarde PostgreSQL ;
+- des images multi-architectures si les nœuds mélangent `amd64` et `arm64`.
 
 ```sh
-minikube start --driver=docker --cpus=4 --memory=6144
+kubectl get nodes -o wide
+kubectl wait --for=condition=Ready node --all --timeout=180s
+kubectl -n openfaas rollout status deployment/gateway
 ```
 
-Pour des images chargées localement, configurer le fournisseur OpenFaaS avec
-`faasnetes.imagePullPolicy=IfNotPresent` (valeur Helm). Sans cela, le fournisseur
-peut tenter de télécharger les images locales depuis un registre.
+### Registre partagé
 
-Dans un terminal, exposer la passerelle :
+Les tags `local` et `latest` sont interdits pour le cluster. Utiliser un identifiant
+immuable, par exemple le SHA Git. Chaque pod peut être planifié sur un nœud différent ;
+charger une image dans le cache d’un seul nœud n’est donc pas un déploiement valide.
+
+Pour un registre privé, configurer `/etc/rancher/k3s/registries.yaml` sur le serveur
+et sur **chaque agent**. Exemple :
+
+```yaml
+mirrors:
+  registry.example.com:
+    endpoint:
+      - https://registry.example.com
+configs:
+  registry.example.com:
+    auth:
+      username: REGISTRY_USER
+      password: REGISTRY_PASSWORD
+    tls:
+      ca_file: /etc/rancher/k3s/registry-ca.crt
+```
+
+Protéger ce fichier, installer la CA sur tous les nœuds, puis redémarrer `k3s` sur
+le serveur et `k3s-agent` sur les agents. Un registre public ne nécessite pas cette
+configuration. Ne pas utiliser de registre HTTP non chiffré en production.
+
+### Construction et publication
+
+La passerelle peut rester privée. Le port-forward suivant est uniquement un tunnel
+d’administration pour `faas-cli`, pas le point d’entrée des utilisateurs :
 
 ```sh
 kubectl -n openfaas port-forward svc/gateway 8080:8080
 ```
 
-S’authentifier avec `faas-cli login` selon les instructions de l’installation.
-Arrêter auparavant la passerelle Docker locale si elle occupe le port 8080.
-
-Configurer et construire les images locales :
+Dans un autre terminal, se connecter à OpenFaaS et au registre, puis publier les
+quatre images avec le même tag :
 
 ```sh
 export OPENFAAS_URL=http://127.0.0.1:8080
-export OPENFAAS_PREFIX=cofrap
-export IMAGE_TAG=local
-export PUBLIC_BASE_URL=http://localhost:8000
+export OPENFAAS_PREFIX=registry.example.com/cofrap
+export IMAGE_TAG="$(git rev-parse --short=12 HEAD)"
+export PUBLIC_BASE_URL=https://cofrap.example.com
+
+docker login registry.example.com
 faas-cli build -f stack.yml
-docker build --target frontend -t cofrap-frontend:local .
-minikube image load cofrap/cofrap-generate-password:local
-minikube image load cofrap/cofrap-generate-2fa:local
-minikube image load cofrap/cofrap-authenticate:local
-minikube image load cofrap-frontend:local
+faas-cli push -f stack.yml
+docker build --target frontend \
+  -t "${OPENFAAS_PREFIX}/cofrap-frontend:${IMAGE_TAG}" .
+docker push "${OPENFAAS_PREFIX}/cofrap-frontend:${IMAGE_TAG}"
 ```
 
-Créer deux secrets OpenFaaS à partir de fichiers locaux contenant uniquement leur
-valeur : mot de passe PostgreSQL et clé Fernet. Conserver la même clé pour les trois
-fonctions. Garder ces fichiers hors Git.
+Une construction locale produit l’architecture de la machine. Pour un cluster mixte,
+publier un manifeste multi-architecture pour chacune des quatre images avec la chaîne
+BuildKit de l’organisation avant le déploiement.
+
+### Configuration des manifests
+
+Dans `deploy/kustomization.yaml`, remplacer `registry.example.com/cofrap` et
+`replace-with-git-sha` par `OPENFAAS_PREFIX` et `IMAGE_TAG`. Dans
+`deploy/deployment-config.yaml`, définir :
+
+- `PUBLIC_BASE_URL`, origine HTTPS publique complète, sans chemin ;
+- `COFRAP_HOST`, nom DNS seul utilisé par l’Ingress ;
+- `STORAGE_CLASS`, classe CSI retenue pour PostgreSQL.
+
+La valeur k3s `local-path` fonctionne sur un cluster standard mais attache les données
+au disque d’un seul nœud. Une panne de ce nœud rend la base indisponible. Pour une
+replanification sur un autre nœud, utiliser une classe CSI répliquée telle que Longhorn
+ou une base PostgreSQL externe. Le StatefulSet fourni reste mono-instance dans tous
+les cas et les sauvegardes doivent être organisées séparément.
+
+Créer le secret TLS dans le namespace du frontend, sauf si cert-manager le gère :
+
+```sh
+kubectl create namespace cofrap --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n cofrap create secret tls cofrap-tls \
+  --cert=/chemin/prive/tls.crt \
+  --key=/chemin/prive/tls.key
+```
+
+Vérifier le rendu avant toute application. Les images finales ne doivent contenir
+ni `replace-with-git-sha`, ni un registre d’exemple :
+
+```sh
+kubectl kustomize deploy > /tmp/cofrap-k3s.yaml
+kubectl apply --dry-run=server -f /tmp/cofrap-k3s.yaml
+```
+
+### Secrets et déploiement
+
+Créer deux secrets OpenFaaS à partir de fichiers contenant uniquement leur valeur :
+mot de passe PostgreSQL et clé Fernet. Conserver la même clé pour les trois fonctions,
+la sauvegarder dans un coffre et garder ces fichiers hors Git.
 
 ```sh
 faas-cli secret create cofrap-postgres-password --from-file /chemin/prive/postgres-password
 faas-cli secret create cofrap-encryption-key --from-file /chemin/prive/encryption-key
 ```
 
-Ils sont montés dans `/var/openfaas/secrets/`. Les fonctions et le Job de migration
-les lisent à cet emplacement. Le frontend ne reçoit aucun de ces secrets.
+Ils sont créés dans `openfaas-fn` et montés dans `/var/openfaas/secrets/`. Les
+fonctions et le Job de migration les lisent à cet emplacement. Le frontend ne reçoit
+aucun de ces secrets. Remplacer directement la clé Fernet rendrait les TOTP existants
+illisibles. Changer le Secret PostgreSQL ne change pas le mot de passe d’une base déjà
+initialisée.
 
-Démarrer la base puis appliquer les migrations avant de déployer les fonctions :
+Appliquer la base seule, attendre qu’elle soit prête, puis appliquer le rendu k3s.
+Supprimer le Job terminé garantit que les migrations de la version courante sont
+réellement rejouées. Le Job utilise exactement l’image `generate-password` publiée
+avec les fonctions.
 
 ```sh
-kubectl apply -f deploy/postgres.yaml
-kubectl -n openfaas-fn rollout status statefulset/postgres
-kubectl apply -f deploy/migrate.yaml
-kubectl -n openfaas-fn wait --for=condition=complete job/cofrap-migrate --timeout=120s
+kubectl apply -k deploy --selector app=cofrap-postgres
+kubectl -n openfaas-fn rollout status statefulset/postgres --timeout=180s
+kubectl -n openfaas-fn get pvc
+
+kubectl -n openfaas-fn delete job cofrap-migrate --ignore-not-found
+kubectl apply -k deploy
+kubectl -n openfaas-fn wait \
+  --for=condition=complete job/cofrap-migrate --timeout=180s
+
 faas-cli deploy -f stack.yml
-kubectl apply -f deploy/frontend.yaml
-kubectl -n openfaas rollout status deployment/cofrap-frontend
-kubectl -n openfaas port-forward svc/cofrap-frontend 8000:8000
+kubectl -n openfaas-fn rollout status deployment/generate-password --timeout=180s
+kubectl -n openfaas-fn rollout status deployment/generate-2fa --timeout=180s
+kubectl -n openfaas-fn rollout status deployment/authenticate --timeout=180s
+kubectl -n cofrap rollout status deployment/cofrap-frontend --timeout=180s
 ```
 
-Pour une nouvelle version de migration, créer un Job avec un nouveau nom. Pour un
-cluster distant, utiliser un registre accessible au cluster, publier les images
-avec `faas-cli push` et adapter les images des manifests frontend/migration.
+Contrôler ensuite les images, le placement sur les nœuds, l’Ingress et les probes :
+
+```sh
+kubectl get pods -A -o wide
+kubectl -n openfaas-fn get deploy,pods -o wide
+kubectl -n cofrap get deploy,pods,service,ingress,pdb -o wide
+curl --fail https://cofrap.example.com/health/live
+curl --fail https://cofrap.example.com/health/ready
+```
+
+Supprimer un pod de fonction et vérifier qu’il redémarre sur un agent sans
+`ImagePullBackOff`. Cette vérification valide l’accès au registre depuis les nœuds,
+contrairement à un simple test depuis la machine de construction.
 
 ## Scale to Zero
 
@@ -164,6 +263,8 @@ trois fonctions pendant plus de dix minutes sans requête, puis refaire une conn
 avec leur propre cycle de vie et leurs connexions PostgreSQL. Le client HTTP du
 frontend traverse un transport de test qui route vers ces applications ; il ne
 court-circuite pas les handlers. Cette suite ne valide pas Kubernetes ni le watchdog.
+Elle ne valide pas non plus le registre, le placement multi-nœuds, l’Ingress TLS,
+la reprise du volume PostgreSQL ni la réaction à la perte d’un nœud.
 
 Le parcours et le stockage existants sont conservés : QR de récupération à usage
 unique, hachage Argon2 permanent, chiffrement temporaire du mot de passe et

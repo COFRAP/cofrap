@@ -5,19 +5,32 @@ metadata:
   namespace: openfaas-fn
 spec:
   backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
   template:
     spec:
       restartPolicy: Never
+      automountServiceAccountToken: false
       containers:
         - name: migrate
-          image: cofrap/cofrap-generate-password:local
+          image: cofrap-generate-password
           imagePullPolicy: IfNotPresent
           command: ["alembic", "upgrade", "head"]
           env:
             - name: POSTGRES_HOST
-              value: postgres.openfaas-fn.svc.cluster.local
+              value: postgres.openfaas-fn.svc
             - name: POSTGRES_PORT
               value: "5432"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
           volumeMounts:
             - name: password
               mountPath: /var/openfaas/secrets/cofrap-postgres-password

@@ -77,7 +77,7 @@ src/cofrap/
 └── function_runtime.py # Cycle de vie commun des fonctions
 stack.yml               # Trois images et déploiements OpenFaaS
 Dockerfile              # Construction depuis le package partagé
-deploy/                # PostgreSQL, migration et frontend Kubernetes
+deploy/                # Kustomize k3s : PostgreSQL, migration, frontend et Ingress
 ```
 
 FastAPI appelle les trois fonctions par HTTP via la passerelle ; seules les
@@ -85,7 +85,9 @@ fonctions accèdent à PostgreSQL et génèrent les QR. Une transaction couvre c
 opération métier, avec verrouillage des lignes pour les remises et codes TOTP.
 
 Le démarrage Docker local utilise une passerelle Nginx de développement. Pour
-OpenFaaS sur Kubernetes/Minikube, suivre le [guide de déploiement](docs/openfaas.md).
+OpenFaaS sur un cluster k3s multi-nœuds, suivre le
+[guide de déploiement](docs/openfaas.md#déploiement-sur-k3s-multi-nœuds). Les images
+sont publiées avec un tag immuable dans un registre accessible par tous les nœuds.
 Voir aussi [l’architecture et les choix de stockage](docs/architecture.md).
 
 ## API JSON
@@ -150,3 +152,6 @@ L’horloge injectable simule l’expiration sans endpoint de falsification des 
   des clés restent à prévoir avant exposition publique.
 - Conserver la clé Fernet : sa perte empêche de déchiffrer les TOTP.
   Changer le mot de passe dans `.env` ne change pas celui d’un volume déjà initialisé.
+- Le PostgreSQL fourni est mono-instance. La classe k3s `local-path` ne permet pas
+  la reprise sur un autre nœud ; choisir un stockage CSI répliqué ou une base externe
+  et tester les restaurations avant une utilisation de production.

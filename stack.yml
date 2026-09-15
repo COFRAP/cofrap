@@ -11,7 +11,7 @@ functions:
     build_args:
       FUNCTION_NAME: generate-password
     environment:
-      POSTGRES_HOST: postgres.openfaas-fn.svc.cluster.local
+      POSTGRES_HOST: postgres.openfaas-fn.svc
       POSTGRES_PORT: "5432"
       POSTGRES_DB: cofrap
       POSTGRES_USER: cofrap
@@ -37,7 +37,7 @@ functions:
     build_args:
       FUNCTION_NAME: generate-2fa
     environment:
-      POSTGRES_HOST: postgres.openfaas-fn.svc.cluster.local
+      POSTGRES_HOST: postgres.openfaas-fn.svc
       POSTGRES_PORT: "5432"
       POSTGRES_DB: cofrap
       POSTGRES_USER: cofrap
@@ -63,7 +63,7 @@ functions:
     build_args:
       FUNCTION_NAME: authenticate
     environment:
-      POSTGRES_HOST: postgres.openfaas-fn.svc.cluster.local
+      POSTGRES_HOST: postgres.openfaas-fn.svc
       POSTGRES_PORT: "5432"
       POSTGRES_DB: cofrap
       POSTGRES_USER: cofrap

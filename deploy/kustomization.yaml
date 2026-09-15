@@ -1,0 +1,54 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - deployment-config.yaml
+  - postgres.yaml
+  - migrate.yaml
+  - frontend.yaml
+  - frontend-ingress.yaml
+  - frontend-pdb.yaml
+
+# Replace these examples with a registry reachable from every k3s node and an
+# immutable release tag before deploying.
+images:
+  - name: cofrap-generate-password
+    newName: registry.example.com/cofrap/cofrap-generate-password
+    newTag: replace-with-git-sha
+  - name: cofrap-frontend
+    newName: registry.example.com/cofrap/cofrap-frontend
+    newTag: replace-with-git-sha
+
+replacements:
+  - source:
+      kind: ConfigMap
+      name: cofrap-deployment-config
+      fieldPath: data.PUBLIC_BASE_URL
+    targets:
+      - select:
+          kind: Deployment
+          name: cofrap-frontend
+        fieldPaths:
+          - spec.template.spec.containers.[name=frontend].env.[name=PUBLIC_BASE_URL].value
+  - source:
+      kind: ConfigMap
+      name: cofrap-deployment-config
+      fieldPath: data.COFRAP_HOST
+    targets:
+      - select:
+          kind: Ingress
+          name: cofrap-frontend
+        fieldPaths:
+          - spec.rules.0.host
+          - spec.tls.0.hosts.0
+  - source:
+      kind: ConfigMap
+      name: cofrap-deployment-config
+      fieldPath: data.STORAGE_CLASS
+    targets:
+      - select:
+          kind: StatefulSet
+          name: postgres
+        fieldPaths:
+          - spec.volumeClaimTemplates.0.spec.storageClassName

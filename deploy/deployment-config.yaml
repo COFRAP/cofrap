@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cofrap-deployment-config
+  namespace: cofrap
+data:
+  PUBLIC_BASE_URL: https://cofrap.example.com
+  COFRAP_HOST: cofrap.example.com
+  STORAGE_CLASS: local-path

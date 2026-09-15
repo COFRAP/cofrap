@@ -2,9 +2,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: cofrap-frontend
-  namespace: openfaas
+  namespace: cofrap
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: cofrap-frontend
@@ -13,17 +13,38 @@ spec:
       labels:
         app: cofrap-frontend
     spec:
+      automountServiceAccountToken: false
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: cofrap-frontend
       containers:
         - name: frontend
-          image: cofrap-frontend:local
+          image: cofrap-frontend
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
           env:
             - name: OPENFAAS_GATEWAY_URL
-              value: http://gateway.openfaas.svc.cluster.local:8080
+              value: http://gateway.openfaas.svc:8080
             - name: PUBLIC_BASE_URL
-              value: http://localhost:8000
+              value: https://cofrap.example.com
+            - name: COOKIE_SECURE
+              value: "true"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
           readinessProbe:
             httpGet:
               path: /health/live
@@ -37,7 +58,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: cofrap-frontend
-  namespace: openfaas
+  namespace: cofrap
 spec:
   selector:
     app: cofrap-frontend

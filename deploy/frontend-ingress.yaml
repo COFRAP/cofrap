@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cofrap-frontend
+  namespace: cofrap
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - cofrap.example.com
+      secretName: cofrap-tls
+  rules:
+    - host: cofrap.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: cofrap-frontend
+                port:
+                  number: 8000
