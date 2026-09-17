@@ -28,6 +28,7 @@ Pour arrêter les conteneurs en conservant les données : `make functions-down`.
 | Guide | Contenu |
 | --- | --- |
 | [Architecture](docs/architecture.md) | Composants, parcours utilisateur, sécurité et limites |
+| [Base de données](docs/base-de-donnees.md) | Rôle de chaque colonne, types, jetons et durées de validité |
 | [Développement local](docs/developpement.md) | Docker, configuration locale et tests |
 | [API HTTP](docs/api.md) | Routes publiques et appels internes aux fonctions |
 | [OpenFaaS](docs/openfaas.md) | Images, secrets et déploiement sur k3s |
