@@ -1,141 +1,119 @@
-# Architecture et décisions
+# Architecture
 
-## Dépendances
+COFRAP est un prototype d’authentification avec mot de passe généré et second
+facteur TOTP (code fourni par une application d’authentification).
+
+## Composants
 
 ```mermaid
 flowchart LR
-    Browser[Navigateur HTMX] --> Frontend[FastAPI frontend]
-    Frontend --> Gateway[Passerelle OpenFaaS]
+    Browser[Navigateur HTMX] --> Frontend[Frontend FastAPI / Jinja2]
+    Frontend --> Gateway[Passerelle HTTP]
     Gateway --> Password[generate-password]
     Gateway --> Totp[generate-2fa]
     Gateway --> Auth[authenticate]
-    Password --> DB[(PostgreSQL : users)]
+    Password --> DB[(PostgreSQL)]
     Totp --> DB
     Auth --> DB
 ```
 
-`frontend/main.py` assemble le client HTTP et les routes HTML/JSON. Il ne crée
-aucun pool SQL et ne reçoit pas la clé de chiffrement. Les QR sont produits par
-les fonctions, puis affichés par le frontend.
+La passerelle est OpenFaaS sur k3s, ou Nginx en développement Docker local.
+Le frontend appelle les fonctions par HTTP : il n’accède pas à la base et n’a pas
+besoin de la clé de chiffrement. Les fonctions produisent aussi les QR codes.
 
-Chaque dossier `functions/<nom>/` contient les handlers et son service métier.
-`function_runtime.py` assemble un pool SQL, les adaptateurs et uniquement le service
-concerné. Les modèles, contrats et utilitaires communs sont installés dans chaque
-image depuis `src/cofrap`. Aucune fonction n’appelle le frontend.
+| Emplacement | Rôle |
+| --- | --- |
+| `src/cofrap/frontend/` | Pages HTML, API JSON et client HTTP des fonctions |
+| `functions/generate-password/` | Inscription, remise unique et renouvellement du mot de passe |
+| `functions/generate-2fa/` | Configuration TOTP et activation du compte |
+| `functions/authenticate/` | Connexion, session et déconnexion |
+| `src/cofrap/domain/` | Modèle utilisateur, expiration et erreurs métier |
+| `src/cofrap/application/` | Interfaces, résultats et gestion des jetons |
+| `src/cofrap/infrastructure/` | PostgreSQL, chiffrement, TOTP et QR codes |
+| `src/cofrap/contracts.py` | Validation des entrées HTTP |
+| `src/cofrap/function_runtime.py` | Démarrage des fonctions et connexions à la base |
 
-Les fonctions reçoivent une fabrique de transactions et une horloge injectable.
-La séparation HTTP conserve les erreurs métier et les dates via des contrats typés.
-Voir [les opérations, la construction et le déploiement](openfaas.md).
+Chaque fonction a un `handler.py` pour HTTP et un `service.py` pour les règles
+métier. Le package commun `src/cofrap` est installé dans chaque image.
+Les migrations Alembic préparent la base avant le démarrage des fonctions.
 
-## États et autorisations
+## Parcours utilisateur
 
-```mermaid
-stateDiagram-v2
-    [*] --> Activation: création et génération du mot de passe
-    Activation --> Activation: remise unique et configuration TOTP
-    Activation --> Actif: confirmation TOTP
-    Actif --> Actif: mot de passe et nouveau code TOTP
-    Actif --> Expiré: échéance atteinte et anciens facteurs vérifiés
-    Expiré --> Activation: autorisation de renouvellement consommée
-```
+1. **Inscription** : un mot de passe de 24 caractères est généré. Le compte reste inactif.
+2. **Remise** : un lien ou un QR permet de révéler le mot de passe une seule fois.
+   Le QR contient le lien temporaire, pas le mot de passe.
+3. **Activation** : après la remise, l’utilisateur configure son application TOTP
+   et confirme un code. Cette confirmation démarre les six mois de validité.
+4. **Connexion** : le mot de passe et un nouveau code TOTP ouvrent une session.
+5. **Renouvellement** : après six mois calendaires, les anciens facteurs valides
+   donnent uniquement un jeton de renouvellement. Celui-ci remplace les deux
+   facteurs et impose une nouvelle activation.
 
-Le compte ne devient actif qu’après preuve de possession du TOTP. `generated_at`
-est fixé à cette activation, quand le couple devient utilisable. Les 15 minutes
-d’activation ne font pas partie de la période d’utilisation.
+Les six mois sont calculés à la même heure UTC, avec ajustement au dernier jour
+si nécessaire : une activation le 31 août expire le dernier jour de février.
+L’expiration est vérifiée à l’usage ; aucun traitement planifié ne marque les comptes.
 
-La limite correspond à **six mois calendaires**, à la même heure UTC. Le 31 août
-expire le dernier jour de février. L’égalité avec l’échéance signifie déjà expiré.
+| Jeton | Durée |
+| --- | --- |
+| Activation et remise | 15 minutes à partir de l’inscription ou du renouvellement |
+| Renouvellement | 5 minutes |
+| Session | 30 minutes au maximum, sans dépasser l’expiration des identifiants |
 
-Les anciens facteurs sont vérifiés avant d’annoncer l’expiration et de donner
-l’autorisation de renouvellement. Cela empêche un reset par quelqu’un connaissant
-seulement le login. `expired` est alors persisté, sans créer de session normale.
+Une seule session est conservée par compte : une nouvelle connexion remplace la
+précédente. Le renouvellement révoque les anciens jetons et la session.
 
-Le renouvellement révoque les autorisations / sessions, remplace le mot de passe
-et efface l’ancien TOTP. Le compte reste inutilisable jusqu’à la confirmation du
-nouveau TOTP. Une transaction empêche l’observation d’un état partiellement écrit.
+## Stockage et sécurité
 
-## Stockage sensible
+Les données métier sont dans la table `users` de PostgreSQL.
 
-Une table `users`, avec des colonnes supplémentaires pour les capacités temporaires.
-Le modèle SQL n’est jamais utilisé directement comme réponse HTTP.
+| Donnée | Stockage |
+| --- | --- |
+| Mot de passe | Hachage Argon2id |
+| Mot de passe en attente de remise | Chiffrement Fernet, effacé lors de la remise |
+| Secret TOTP | Chiffrement Fernet |
+| Jetons temporaires et de session | Empreintes SHA-256 |
+| Dernier pas TOTP accepté | Entier empêchant la réutilisation d’un code |
 
-| Donnée | Stockage | Raison |
-| --- | --- | --- |
-| Mot de passe | Hachage Argon2id salé | Vérification sans restitution |
-| Mot de passe avant remise | Chiffrement authentifié Fernet | Restitution unique, puis effacement |
-| Secret TOTP | Chiffrement authentifié Fernet | Déchiffrement nécessaire à la vérification |
-| Jetons temporaires / session | SHA-256 | Jetons aléatoires de 256 bits |
-| Dernier pas TOTP accepté | Entier | Rejet du même code et des pas antérieurs |
+Le TOTP utilise 6 chiffres, des pas de 30 secondes et une tolérance d’un pas avant
+ou après. Les transactions et le verrouillage des lignes empêchent les doubles
+remises et la réutilisation concurrente d’un code TOTP.
 
-Les quatre catégories de caractères sont choisies avec `secrets`, complétées
-jusqu’à 24 caractères puis mélangées cryptographiquement. TOTP utilise 6 chiffres,
-SHA-1, des pas de 30 secondes et une tolérance de ±1 pas. Un pas déjà accepté ne
-peut pas être réutilisé, même dans une requête concurrente.
+La remise est enregistrée avant la réponse HTTP. Si cette réponse est perdue,
+le mot de passe ne peut plus être récupéré. Le client ne relance donc pas
+automatiquement les appels aux fonctions.
 
-La remise verrouille la ligne, vérifie son échéance, déchiffre, efface le chiffré
-et le jeton, puis commit avant de répondre. Une requête simultanée échoue. Si la
-réponse réseau est perdue après commit, le mot de passe n’est pas récupérable :
-c’est le compromis explicite d’une remise à usage unique.
+Les formulaires HTML utilisent des cookies `HttpOnly`, `SameSite=Strict` et un
+jeton CSRF. Sous HTTPS, `COOKIE_SECURE=true` et `PUBLIC_BASE_URL` doit correspondre
+à l’origine publique. Les routes JSON protégées utilisent des jetons Bearer ;
+la remise transmet son jeton dans le corps JSON.
 
-La clé Fernet et les credentials DB sont lus depuis `.env` en développement. Sur
-k3s, les fonctions et la migration les lisent dans les secrets montés sous
-`/var/openfaas/secrets/`. Ils ne sont ni dans Git ni dans les templates.
-Les paramètres SQL ne sont pas journalisés.
-
-## Frontend et HTTP
-
-- Cookies `HttpOnly`, `SameSite=Strict`, et `Secure` avec `COOKIE_SECURE=true` sous HTTPS.
-- Les écritures HTML exigent un jeton CSRF HTMX correspondant au cookie.
-  L’origine est contrôlée si fournie : sur k3s, `PUBLIC_BASE_URL` doit être l’origine
-  HTTPS exposée par l’Ingress et `COOKIE_SECURE` doit rester à `true`.
-- Les routes JSON utilisent exclusivement les jetons Bearer, sans authentification
-  implicite par cookie de session.
-- Réponses `no-store`, `no-referrer`, interdiction d’encadrement et CSP avec
-  scripts/styles locaux. Swagger / ReDoc conservent leurs ressources externes.
-- Pas de cache d’historique HTMX, pas de scripts reçus dans les fragments,
-  pas de secrets dans `localStorage` ni `sessionStorage`.
-- Le jeton QR est dans le fragment de l’URL, effacé de l’adresse puis envoyé par
-  POST explicite. Les logs d’accès ne l’enregistrent pas. Un GET ne consomme rien.
-- Alternatives textuelles sélectionnables aux QR, champs étiquetés, erreurs
-  annoncées et navigation clavier prévue.
+Les réponses interdisent le cache. Le jeton du lien de remise se trouve après `#`,
+puis est retiré de l’adresse et envoyé par POST après confirmation. Un simple GET
+ne consomme pas la remise.
 
 ## Maintenance locale
 
-Les capacités expirées sont refusées même avant nettoyage. Pour supprimer leurs
-empreintes et effacer les mots de passe encore en attente de remise :
+Les jetons expirés sont refusés immédiatement, mais leur suppression physique
+nécessite cette commande, avec la base et les secrets configurés dans `.env` :
 
 ```sh
 .venv/bin/python -m cofrap.infrastructure.maintenance
 ```
 
-Cette commande ne supprime aucun utilisateur, hachage de mot de passe ni TOTP actif.
-La planifier côté exploitation si une purge périodique est souhaitée ; elle n’est
-pas lancée automatiquement dans le PoC.
+Elle efface les jetons expirés et les mots de passe chiffrés dont la remise a
+expiré. Elle conserve les utilisateurs, leurs hachages et leurs secrets TOTP.
+Elle n’est pas planifiée automatiquement.
 
-## Validation et limites
+## Vérification et limites
 
-Les tests utilisent PostgreSQL 17 isolé, les vraies migrations et les mêmes
-adaptateurs que le développement. Les tests concurrents ne reposent pas sur SQLite.
+`make check` lance les contrôles de style et les tests unitaires.
+`make test-integration` utilise PostgreSQL 17, les migrations réelles et les trois
+applications de fonction via un transport HTTP de test. Ces tests couvrent les
+règles métier et les réponses HTML, mais pas un navigateur réel ni le cluster k3s.
 
-Les tests HTML vérifient réponses et cookies côté serveur. Le rendu visuel et les
-interactions JavaScript n’ont pas été vérifiés dans le navigateur intégré : aucun
-navigateur n’était disponible dans la session d’implémentation.
+La récupération de compte, la limitation de débit, les invitations, les sauvegardes
+et la rotation des clés ne sont pas implémentées. Un facteur perdu ou une activation
+abandonnée nécessite une intervention hors du parcours prévu.
 
-La récupération de compte, la limitation de débit et les invitations ne sont pas
-implémentées. La maîtrise des abus reste prévue pour l’autre équipe. Les trois
-fonctions sont empaquetées pour OpenFaaS. Le mode Docker local utilise une passerelle
-de développement. Le déploiement k3s fournit un registre partagé, un Ingress TLS et
-une répartition préférentielle du frontend ; le placement multi-nœuds, le stockage,
-et la perte d’un nœud doivent être validés sur le cluster cible. Le scale-to-zero
-natif est exclu du PoC, qui conserve OpenFaaS Community gratuit : il nécessite
-OpenFaaS Standard/Pro et son autoscaler sous licence. Chaque fonction conserve
-au moins un réplica. Voir [la justification](openfaas.md#scale-to-zero).
-
-
-## Interprétation du cahier des charges
-
-Cette réorganisation conserve les règles existantes. Le QR du mot de passe contient
-un lien à remise unique plutôt que le mot de passe lui-même. Le mot de passe est
-chiffré jusqu’à sa remise puis seul son hachage est conservé. La date de début des
-six mois est celle de l’activation du couple d’identifiants. Ces trois choix doivent
-être explicités lors de la comparaison avec une lecture littérale du sujet.
+Voir le [développement local](developpement.md) pour Docker et le
+[déploiement OpenFaaS](openfaas.md) pour k3s.
