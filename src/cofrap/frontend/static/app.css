@@ -513,6 +513,31 @@ button:disabled {
   background: #f6f8f2;
   letter-spacing: 0.025em;
 }
+.secret-control {
+  display: flex;
+}
+.secret-control .secret-value {
+  min-width: 0;
+  border-radius: 7px 0 0 7px;
+}
+.copy-secret {
+  flex-shrink: 0;
+  border: 1px solid #d9e0d4;
+  border-left: 0;
+  border-radius: 0 7px 7px 0;
+  padding: 0 14px;
+  background: #f0f4eb;
+  color: #284e3c;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.copy-secret:hover {
+  background: #e2eadc;
+}
+.reveal-secret {
+  margin: 10px 0 0;
+}
 .checkbox {
   display: flex;
   align-items: center;
