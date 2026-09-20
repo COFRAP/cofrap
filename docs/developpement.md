@@ -45,3 +45,15 @@ make test-integration     # Tests avec PostgreSQL dédié sur le port 55433
 
 Voir les [limites des tests](architecture.md#vérification-et-limites).
 Le déploiement sur un cluster est décrit dans [OpenFaaS](openfaas.md).
+
+Les tests de `tests/unit/functions` appellent directement la logique métier des trois
+fonctions OpenFaaS, sans HTTP, Docker ni PostgreSQL. Ils utilisent un stockage en
+mémoire, une heure fixe et les vrais outils de chiffrement et de TOTP. Ils couvrent
+les cas positifs et négatifs : inscription, remise unique du mot de passe, activation
+2FA, connexion, déconnexion, expiration et renouvellement.
+
+Pour lancer uniquement ces tests :
+
+```sh
+.venv/bin/pytest tests/unit/functions -q
+```
