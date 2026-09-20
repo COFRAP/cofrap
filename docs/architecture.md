@@ -62,6 +62,41 @@ L’expiration est vérifiée à l’usage ; aucun traitement planifié ne marqu
 Une seule session est conservée par compte : une nouvelle connexion remplace la
 précédente. Le renouvellement révoque les anciens jetons et la session.
 
+### Cycle de vie de l’authentification TOTP
+
+```mermaid
+flowchart TD
+    Inscription["Inscription : compte inactif"] --> Preparation["Nouveau mot de passe<br/>Jetons de remise et d’activation : 15 minutes"]
+    Preparation --> Remise["Remise unique du mot de passe par lien ou QR"]
+    Remise --> Configuration["Configuration de l’application TOTP<br/>Secret et QR de configuration"]
+    Configuration --> Confirmation{"Premier code TOTP valide ?"}
+    Confirmation -->|Non| RefusActivation["Activation refusée"]
+    RefusActivation -->|Nouvel essai avant expiration du jeton| Confirmation
+    Confirmation -->|Oui| Activation["Compte activé pour six mois calendaires<br/>Jeton d’activation révoqué"]
+    Activation --> Connexion["Connexion : mot de passe et nouveau code TOTP"]
+    Connexion --> Facteurs{"Compte activé et deux facteurs valides ?"}
+    Facteurs -->|Non| RefusConnexion["Connexion refusée"]
+    RefusConnexion -->|Nouvel essai| Connexion
+    Facteurs -->|Oui| Expiration{"Identifiants expirés ?"}
+    Expiration -->|Non| Session["Session ouverte<br/>30 minutes maximum, limitée par l’expiration des identifiants"]
+    Session --> FinSession["Déconnexion ou expiration de la session"]
+    FinSession --> Connexion
+    Expiration -->|Oui| JetonRenouvellement["Session révoquée<br/>Jeton de renouvellement seul : 5 minutes"]
+    JetonRenouvellement --> Renouvellement["Renouvellement : remplacement des deux facteurs<br/>Ancien secret TOTP supprimé, activation requise"]
+    Renouvellement --> Preparation
+```
+
+Les opérations de remise, d’activation et de renouvellement exigent un jeton
+valide : un jeton invalide ou expiré est refusé sans poursuivre le parcours.
+Si le jeton de renouvellement expire, une nouvelle connexion avec les anciens
+facteurs valides et un nouveau code TOTP permet d’en obtenir un autre.
+Une activation abandonnée ou expirée nécessite une intervention hors du parcours prévu.
+
+Chaque code accepté à la confirmation ou à la connexion enregistre son pas TOTP.
+Un code correspondant à ce pas ou à un pas antérieur est ensuite refusé, y compris
+lors de la première connexion après activation. L’expiration des six mois est
+contrôlée à l’usage : elle ne déclenche pas automatiquement le renouvellement.
+
 ## Stockage et sécurité
 
 Les données métier sont dans la table `users` de PostgreSQL.
