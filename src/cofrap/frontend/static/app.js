@@ -27,6 +27,31 @@ document.addEventListener("htmx:afterSwap", (event) => {
   }
 });
 
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-copy-target]");
+  if (!button) return;
+
+  const secret = document.getElementById(button.dataset.copyTarget);
+  const feedback = document.getElementById("feedback");
+  try {
+    await navigator.clipboard.writeText(secret.value);
+    button.textContent = "Copié";
+    feedback.textContent = "Le mot de passe a été copié dans le presse-papiers.";
+  } catch {
+    secret.select();
+    feedback.textContent =
+      "La copie a échoué. Sélectionnez le mot de passe pour le copier manuellement.";
+  }
+});
+
+document.addEventListener("change", (event) => {
+  const checkbox = event.target.closest("[data-reveal-target]");
+  if (!checkbox) return;
+
+  const secret = document.getElementById(checkbox.dataset.revealTarget);
+  secret.type = checkbox.checked ? "text" : "password";
+});
+
 function showNetworkError() {
   const feedback = document.getElementById("feedback");
   if (feedback) {
